@@ -1,0 +1,10 @@
+# Dependências diretas testadas juntas no Python 3.14.4 em 23/08/2026.
+langgraph==1.2.11
+langgraph-checkpoint-sqlite==3.1.1
+pydantic==2.13.4
+streamlit==1.62.0
+langchain-google-genai==4.3.5
+langchain-nvidia-ai-endpoints==1.4.3
+sqlite-vec==0.1.9
+python-dotenv==1.2.3
+pytest==9.1.1

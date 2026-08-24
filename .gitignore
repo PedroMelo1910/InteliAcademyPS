@@ -1,0 +1,35 @@
+# Segredos locais
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Ambiente Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testes, análise e cobertura
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Bancos e artefatos gerados localmente
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Editores e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
