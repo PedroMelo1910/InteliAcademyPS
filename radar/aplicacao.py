@@ -12,6 +12,7 @@ from radar.configuracao import (
     CAMINHO_BANCO,
     CAMINHO_CHECKPOINTS,
     CAMINHO_DADOS_CURADOS,
+    ErroConfiguracao,
     RAIZ_PROJETO,
 )
 from radar.contratos import (
@@ -120,10 +121,12 @@ def criar_aplicacao(
         load_dotenv(RAIZ_PROJETO / ".env")
         api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY não está configurada no .env local.")
+            raise ErroConfiguracao(
+                "GOOGLE_API_KEY não está configurada no .env local. "
+                "Adicione a chave e reinicie a aplicação."
+            )
         provedor = ProvedorGeminiPlanoConsulta(api_key)
     grafo, conexao = montar_grafo(
         BaseStartups(caminho_banco), provedor, caminho_checkpoints
     )
     return AplicacaoRadar(grafo, conexao)
-

@@ -1,7 +1,13 @@
+import logging
+
 import streamlit as st
 
 from radar.agentes.query_planner import ErroQueryPlanner
 from radar.aplicacao import criar_aplicacao
+from radar.configuracao import ErroConfiguracao
+
+
+logger = logging.getLogger(__name__)
 
 
 st.set_page_config(page_title="NVIDIA Startup AI Radar", page_icon="📡", layout="wide")
@@ -32,9 +38,10 @@ if buscar:
         try:
             with st.spinner("Planejando a consulta e recuperando documentos..."):
                 saida = obter_aplicacao().executar_descoberta(consulta)
-        except ErroQueryPlanner as erro:
+        except (ErroConfiguracao, ErroQueryPlanner) as erro:
             st.error(str(erro))
         except Exception as erro:
+            logger.exception("Falha inesperada ao executar a descoberta de startups")
             st.error(
                 "A consulta não pôde ser concluída. Nenhum resultado foi inventado; "
                 "consulte o terminal para diagnosticar a execução local."

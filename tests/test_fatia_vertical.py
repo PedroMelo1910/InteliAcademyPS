@@ -1,7 +1,10 @@
 import sqlite3
 
+import pytest
+
 from radar.agentes.roteadores import rotear_r1
 from radar.aplicacao import criar_aplicacao
+from radar.configuracao import ErroConfiguracao
 from radar.contratos import FiltrosEstruturados, PlanoConsulta
 
 
@@ -24,7 +27,7 @@ def plano_caju():
     )
 
 
-def test_ranking_da_interface_recebe_resultado_real_do_retriever(
+def test_ranking_da_aplicacao_recebe_resultado_real_do_retriever(
     tmp_path, caminho_banco
 ):
     provedor = ProvedorFixo(plano_caju())
@@ -40,6 +43,17 @@ def test_ranking_da_interface_recebe_resultado_real_do_retriever(
     assert saida.trajeto == ("query_planner", "retriever")
     with sqlite3.connect(checkpoints) as conexao:
         assert conexao.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0] > 0
+
+
+def test_chave_gemini_ausente_gera_erro_de_configuracao(monkeypatch, tmp_path):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr("radar.aplicacao.load_dotenv", lambda *_args, **_kwargs: False)
+
+    with pytest.raises(ErroConfiguracao, match="GOOGLE_API_KEY"):
+        criar_aplicacao(
+            caminho_banco=tmp_path / "radar_sem_chave.db",
+            caminho_checkpoints=tmp_path / "checkpoints_sem_chave.db",
+        )
 
 
 def test_caminho_selecionado_e_alcancavel_no_grafo(tmp_path, caminho_banco):
@@ -61,4 +75,3 @@ def test_caminho_selecionado_e_alcancavel_no_grafo(tmp_path, caminho_banco):
     )
     assert rotear_r1(estado) == "analisar"
     assert provedor.chamadas == 0
-

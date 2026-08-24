@@ -4,10 +4,12 @@ Este arquivo reúne a documentação do projeto em um só lugar. Ele é um mater
 
 ## 1. Arquitetura e fluxo atual
 
-O sistema possui uma primeira fatia vertical executável:
+O sistema possui uma primeira fatia vertical executável. O `app.py` atual é somente
+uma bancada provisória para acionar e observar o código; a interface final será
+construída depois que os contratos e as saídas do núcleo estiverem estáveis.
 
 ```text
-Pergunta no Streamlit
+Consulta de entrada (temporariamente pelo Streamlit)
         │
         ▼
 Query Planner — Gemini transforma a frase em PlanoConsulta
@@ -21,7 +23,7 @@ Retriever — FTS5/BM25 ordena os documentos por relevância
         ▼
 R1
   ├─ analisar ───────────────► aprofundamento futuro
-  ├─ candidatas_prontas ─────► ranking no Streamlit
+  ├─ candidatas_prontas ─────► ranking interno da aplicação
   ├─ relaxar ────────────────► volta ao Query Planner
   └─ sem_resultado ──────────► encerra honestamente
 ```
@@ -86,15 +88,15 @@ Executar os testes offline:
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-Iniciar a interface:
+Iniciar a bancada provisória de validação manual:
 
 ```powershell
 .venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-A chave deve existir somente no `.env` local como `GOOGLE_API_KEY`, sem necessidade de aspas. Se a chave estiver ausente ou o Gemini falhar, o sistema interrompe a consulta e não fabrica candidatas.
+A chave deve existir somente no `.env` local como `GOOGLE_API_KEY`, sem necessidade de aspas. Se a chave estiver ausente, o núcleo gera um erro de configuração claro e seguro. Se o Gemini falhar, o sistema interrompe a consulta e não fabrica candidatas.
 
-Os testes atuais cobrem inicialização repetível, filtros estruturados, SQL parametrizado, hífen no FTS5, ordem do BM25, Retriever offline, quatro saídas de R1, dois degraus de relaxamento, structured output inválido, falha do Gemini, checkpoints e integração do resultado real com o ranking.
+Os testes atuais cobrem inicialização repetível, filtros estruturados, SQL parametrizado, hífen no FTS5, ordem do BM25, Retriever offline, quatro saídas de R1, dois degraus de relaxamento, structured output inválido, chave ausente, falha do Gemini, checkpoints e integração do resultado real com o ranking.
 
 Limites deliberados deste momento:
 
@@ -102,3 +104,4 @@ Limites deliberados deste momento:
 - recuperação lexical, ainda sem busca por significado ou sinônimos;
 - ausência de Extractor, Classifier, Evidence Validator, RAG NVIDIA, recomendação, fit-score e briefing;
 - rota `analisar` alcançável, mas sem produzir uma análise fictícia enquanto os agentes seguintes não existirem.
+- interface atual propositalmente provisória; layout e componentes finais serão feitos somente depois do núcleo funcional completo.
