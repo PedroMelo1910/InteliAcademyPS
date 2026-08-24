@@ -38,7 +38,10 @@ if buscar:
         try:
             with st.spinner("Planejando a consulta e recuperando documentos..."):
                 saida = obter_aplicacao().executar_descoberta(consulta)
-        except (ErroConfiguracao, ErroQueryPlanner) as erro:
+        except ErroConfiguracao as erro:
+            st.error(str(erro))
+        except ErroQueryPlanner as erro:
+            logger.exception("O Query Planner interrompeu a consulta com segurança")
             st.error(str(erro))
         except Exception as erro:
             logger.exception("Falha inesperada ao executar a descoberta de startups")
