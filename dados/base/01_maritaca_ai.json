@@ -1,0 +1,41 @@
+{
+  "nome": "Maritaca AI",
+  "site": "https://www.maritaca.ai/",
+  "setor": "Inteligência artificial",
+  "estagio": "não divulgado",
+  "localizacao": "Campinas, SP",
+  "descricao_curta": "Empresa brasileira que desenvolve e oferece modelos de linguagem especializados em português e em contextos do Brasil.",
+  "ano_fundacao": 2022,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Maritaca AI — Inteligência artificial para o Brasil",
+      "conteudo_texto": "A Maritaca AI oferece a família de modelos de linguagem Sabiá, especializada em português e em contextos brasileiros. O produto atende tarefas como análise de documentos, geração de texto, busca na web, uso de ferramentas e integração por API. A empresa descreve um processo próprio de desenvolvimento do Sabiá-4 que inclui pré-treino contínuo em corpus em português e jurídico, ampliação de contexto para 128 mil tokens, ajuste fino supervisionado e alinhamento de preferências. Também oferece versões com inferência realizada no Brasil para necessidades de soberania e residência de dados.",
+      "url_fonte": "https://www.maritaca.ai/",
+      "dominio_fonte": "maritaca.ai",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "release",
+      "titulo": "Sabiá-4 Technical Report",
+      "conteudo_texto": "O relatório técnico assinado pela equipe apresenta o Sabiá-4 e o Sabiazinho-4 como modelos focados no português brasileiro. O trabalho registra quatro etapas de desenvolvimento: pré-treino contínuo, expansão do contexto, ajuste fino supervisionado e alinhamento de preferências. A avaliação cobre conversação em português, legislação brasileira, contexto longo, seguimento de instruções, exames e capacidades agênticas. O relatório também informa treinamento com JAX em TPUs do Google Cloud e janela de contexto de 128 mil tokens, sinais de pesquisa e infraestrutura próprias para modelos de linguagem.",
+      "url_fonte": "https://arxiv.org/abs/2603.10213",
+      "dominio_fonte": "arxiv.org",
+      "data_publicacao": "2026-03-10",
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Pesquisadores da Unicamp desenvolvem soluções brasileiras de IA",
+      "conteudo_texto": "A reportagem identifica a Maritaca AI como startup brasileira fundada em Campinas por pesquisadores ligados à Unicamp. Segundo a matéria, o grupo trabalha com inteligência artificial, processamento de linguagem natural e grandes modelos de linguagem para português. O texto relata o lançamento do MariTalk em 2023 e descreve o Sabiá como o modelo de linguagem usado pelo chatbot. A fonte também registra que a empresa foi fundada em outubro de 2022 e nasceu com pesquisa e desenvolvimento de produtos de IA como atividade central.",
+      "url_fonte": "https://sbtnews.sbt.com.br/noticia/tecnologia/mirando-a-open-ai-pesquisadores-da-unicamp-desenvolvem-chat-gpt-e-dall-e-brasileiros",
+      "dominio_fonte": "sbtnews.sbt.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    }
+  ]
+}
+

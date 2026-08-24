@@ -1,0 +1,40 @@
+{
+  "nome": "Alice",
+  "site": "https://alice.com.br/",
+  "setor": "Saúde",
+  "estagio": "não divulgado",
+  "localizacao": "São Paulo, SP",
+  "descricao_curta": "Operadora brasileira de saúde empresarial que combina coordenação clínica, rede credenciada e tecnologia própria.",
+  "ano_fundacao": 2019,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "blog",
+      "titulo": "O que é a Alice: plano de saúde, healthtech ou um novo modelo de cuidado",
+      "conteudo_texto": "A Alice se apresenta como operadora brasileira de planos de saúde empresariais com rede nacional, tecnologia proprietária e cuidado coordenado pela Atenção Primária. Seu produto final é a prestação de cuidado em saúde de ponta a ponta, e não um software isolado. No serviço Alice Agora, uma inteligência artificial faz a coleta e a estruturação inicial de informações antes do atendimento por profissional de saúde. A própria empresa delimita a IA como apoio à operação e ao cuidado: a tecnologia organiza informações e reduz fragmentação, enquanto o julgamento clínico permanece humano.",
+      "url_fonte": "https://alice.com.br/blog/conheca-a-alice/o-que-e-a-alice/",
+      "dominio_fonte": "alice.com.br",
+      "data_publicacao": "2026-02-03",
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "release",
+      "titulo": "Alice no portfólio do SoftBank Latin America Fund",
+      "conteudo_texto": "O portfólio do SoftBank Latin America Fund inclui a Alice na categoria de healthtech e resume a proposta da empresa como tornar pessoas mais saudáveis por meio de planos de saúde com cuidados essenciais. Essa presença funciona como fonte complementar sobre setor, natureza empresarial e vínculo com investimento de venture capital. A página aponta para o site oficial da Alice e confirma que a companhia faz parte do ecossistema latino-americano de empresas de tecnologia apoiadas pelo fundo.",
+      "url_fonte": "https://www.latinamericafund.com/pt/portfolio/",
+      "dominio_fonte": "latinamericafund.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "release",
+      "titulo": "Alice builds a tech-integrated healthcare system in Brazil",
+      "conteudo_texto": "O comunicado descreve a Alice como empresa brasileira de saúde baseada em tecnologia e registrada na Agência Nacional de Saúde Suplementar. A proposta combina um modelo próprio de cuidado presencial e digital com plano de saúde integrado. A tecnologia conecta hospitais, laboratórios, profissionais e o time de saúde, apoiada por prontuário eletrônico proprietário e dados reunidos para coordenação longitudinal. O documento registra uma rodada Série A anterior ao lançamento e uma equipe multidisciplinar de tecnologia e saúde, oferecendo contexto histórico sobre a construção da operação.",
+      "url_fonte": "https://www.globalprivatecapital.org/app/uploads/2020/07/Alice-PR.pdf",
+      "dominio_fonte": "globalprivatecapital.org",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    }
+  ]
+}
