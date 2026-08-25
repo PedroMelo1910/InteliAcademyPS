@@ -13,3 +13,19 @@ CAMINHO_CHECKPOINTS = RAIZ_PROJETO / "dados" / "checkpoints.db"
 MODELO_GEMINI = "gemini-3.5-flash-lite"
 TETO_DOCUMENTOS_DESCOBERTA = 20
 TETO_RELAXAMENTO = 2
+
+# Base de conhecimento NVIDIA (Entregável 2).
+CAMINHO_FONTES_NVIDIA = RAIZ_PROJETO / "conhecimento" / "fontes"
+MODELO_EMBEDDING_NVIDIA = "nvidia/nemotron-3-embed-1b"
+DIMENSAO_EMBEDDING_NVIDIA = 2048
+MODELO_RERANK_NVIDIA = "nvidia/llama-nemotron-rerank-vl-1b-v2"
+
+# Constantes iniciais do pipeline de recuperação, avaliáveis e calibráveis;
+# não são afirmação de otimalidade.
+K_LEXICAL_NVIDIA = 20
+K_VETORIAL_NVIDIA = 20
+K_RRF = 60
+N_CANDIDATOS_RERANK = 20
+N_TRECHOS_FINAL = 6
+TETO_CARACTERES_CHUNK = 1800
+TAMANHO_LOTE_EMBEDDING = 32

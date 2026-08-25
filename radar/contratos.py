@@ -139,6 +139,103 @@ class StartupCurada(BaseModel):
         return self
 
 
+TECNOLOGIAS_NVIDIA: tuple[str, ...] = (
+    "NVIDIA Inception",
+    "NVIDIA NIM",
+    "NVIDIA NeMo",
+    "NeMo Guardrails",
+    "NVIDIA Triton Inference Server",
+    "TensorRT-LLM",
+    "NVIDIA RAPIDS",
+    "cuDF",
+    "cuML",
+    "CUDA",
+    "NVIDIA Riva",
+    "NVIDIA Omniverse",
+    "NVIDIA Isaac",
+    "NVIDIA Clara",
+    "NVIDIA Morpheus",
+    "NVIDIA AI Enterprise",
+)
+
+TecnologiaNvidia = Literal[
+    "NVIDIA Inception",
+    "NVIDIA NIM",
+    "NVIDIA NeMo",
+    "NeMo Guardrails",
+    "NVIDIA Triton Inference Server",
+    "TensorRT-LLM",
+    "NVIDIA RAPIDS",
+    "cuDF",
+    "cuML",
+    "CUDA",
+    "NVIDIA Riva",
+    "NVIDIA Omniverse",
+    "NVIDIA Isaac",
+    "NVIDIA Clara",
+    "NVIDIA Morpheus",
+    "NVIDIA AI Enterprise",
+]
+
+OrigemChunk = Literal["tecnologia", "conceitual"]
+
+
+class ItemCorpusNvidia(BaseModel):
+    """Regra comum do corpus NVIDIA: origem e tecnologia andam juntas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    topico: str = Field(min_length=2)
+    origem: OrigemChunk
+    tecnologia: TecnologiaNvidia | None = None
+
+    @model_validator(mode="after")
+    def origem_compativel_com_tecnologia(self) -> ItemCorpusNvidia:
+        if (self.origem == "tecnologia") != (self.tecnologia is not None):
+            raise ValueError(
+                "origem 'tecnologia' exige uma tecnologia do TAPI; "
+                "origem 'conceitual' exige tecnologia nula"
+            )
+        return self
+
+
+class FonteNvidia(ItemCorpusNvidia):
+    """Metadados obrigatórios de um arquivo curado da base de conhecimento."""
+
+    fonte_url: AnyHttpUrl
+    titulo: str = Field(min_length=2)
+    data_acesso: date
+
+
+class ChunkNvidia(ItemCorpusNvidia):
+    """Unidade ingerível da base de conhecimento, antes do id do banco."""
+
+    fonte_url: AnyHttpUrl
+    breadcrumb: str = Field(min_length=1)
+    texto_limpo: str = Field(min_length=1)
+    indice_parte: int = Field(ge=1)
+    hash_texto: str = Field(min_length=64, max_length=64)
+
+
+class TrechoNvidia(ItemCorpusNvidia):
+    """Trecho recuperado, pronto para citação com rastreabilidade completa."""
+
+    id_chunk: int
+    breadcrumb: str = Field(min_length=1)
+    texto: str = Field(min_length=1)
+    fonte_url: AnyHttpUrl
+    score_rerank: float
+
+
+class ContextoNvidia(BaseModel):
+    """Saída do RAG NVIDIA: 5 a 8 trechos reordenados pelo reranking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    consulta_gerada: str = Field(min_length=1)
+    trechos: list[TrechoNvidia] = Field(min_length=5, max_length=8)
+
+
 class EstadoRadar(TypedDict, total=False):
     consulta_usuario: str
     startup_selecionada: int | None
