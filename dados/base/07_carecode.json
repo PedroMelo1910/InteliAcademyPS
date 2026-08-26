@@ -1,0 +1,40 @@
+{
+  "nome": "Carecode",
+  "site": "https://www.carecode.ai/",
+  "setor": "Saúde",
+  "estagio": "pre-seed",
+  "localizacao": null,
+  "descricao_curta": "Startup brasileira que oferece uma assistente de IA que automatiza atendimento, agendamento e confirmação de consultas em clínicas de saúde por WhatsApp, telefone e Instagram.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Carecode — AI agents for healthcare clinics",
+      "conteudo_texto": "O site institucional da Carecode, em inglês, descreve uma plataforma que integra assistente de IA, prontuário eletrônico, agenda e gestão financeira para clínicas de saúde. A Assistente de IA atende pacientes 24 horas por WhatsApp, telefone e Instagram, automatizando agendamento, confirmação e reagendamento de consultas, resolvendo cerca de 80% das demandas sem intervenção humana, segundo a própria página.",
+      "url_fonte": "https://www.carecode.ai/en",
+      "dominio_fonte": "carecode.ai",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Backed by a16z and QED, Brazilian startup Carecode puts AI agents to work on healthcare",
+      "conteudo_texto": "A reportagem de 30 de dezembro de 2024 confirma uma rodada pré-seed de US$4,3 milhões liderada por a16z e QED, com participação de Endeavor Catalyst, KDX Ventures, K50 Ventures e Latitud Ventures, além do investidor-anjo David Vélez, fundador do Nubank. Os fundadores citados são Thomaz Srougi, ex-fundador da Dr. Consulta, e Pedro Magalhães, ex-CTO da BEES Bank Brasil.",
+      "url_fonte": "https://techcrunch.com/2024/12/30/backed-by-a16z-and-qed-brazilian-startup-carecode-puts-ai-agents-to-work-on-healthcare/",
+      "dominio_fonte": "techcrunch.com",
+      "data_publicacao": "2024-12-30",
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "blog",
+      "titulo": "Carecode case study — ElevenLabs blog",
+      "conteudo_texto": "O blog da ElevenLabs descreve a integração da Carecode com a tecnologia de voz ElevenAgents via API, permitindo interações faladas em português brasileiro dentro do fluxo de prontuário eletrônico. O texto cita que 43,9% dos pacientes que ligaram já haviam tentado agendar por outro canal antes, evidenciando uma lacuna que a opção de voz ajudou a resolver, segundo depoimento do CTPO da empresa.",
+      "url_fonte": "https://elevenlabs.io/blog/carecode",
+      "dominio_fonte": "elevenlabs.io",
+      "data_publicacao": "2026-06-30",
+      "data_acesso": "2026-08-26"
+    }
+  ]
+}

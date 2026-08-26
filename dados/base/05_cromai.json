@@ -1,0 +1,40 @@
+{
+  "nome": "Cromai",
+  "site": "https://www.cromai.com.br/",
+  "setor": "Agronegócio",
+  "estagio": "série A",
+  "localizacao": "Piracicaba, SP",
+  "descricao_curta": "Agtech brasileira que usa visão computacional e IA treinada em mais de 100 milhões de imagens para identificar e mapear plantas daninhas em lavouras de cana-de-açúcar e soja.",
+  "ano_fundacao": 2017,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Cromai — manejo digital de plantas daninhas",
+      "conteudo_texto": "O site institucional da Cromai se descreve como líder em manejo digital de plantas daninhas, usando visão computacional e inteligência artificial para processar imagens aéreas e identificar ervas daninhas em lavouras de cana-de-açúcar. A sede informada é em Piracicaba, SP, e os produtos citados incluem Scan Weed, Sentinel e Scan Growline, todos com tecnologia proprietária desenvolvida internamente.",
+      "url_fonte": "https://www.cromai.com.br/",
+      "dominio_fonte": "cromai.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Agtech Cromai levanta R$ 30 milhões com ampliação de captação Série A",
+      "conteudo_texto": "A reportagem de 27 de fevereiro de 2024 confirma um aporte adicional de R$12 milhões, elevando o total captado pela Cromai na rodada Série A para R$30 milhões, liderada pelo fundo de corporate venture da TOTVS (iDEXO/Citrino Ventures), com participação da Baraúna VC. Cita a fundação da empresa em 2017 e o fundador Guilherme Castro, engenheiro mecatrônico com doutorado em inteligência artificial, além de planos de expansão para a cultura de soja.",
+      "url_fonte": "https://www.infomoney.com.br/business/agtech-cromai-levanta-r-30-milhoes-com-ampliacao-de-captacao-serie-a/",
+      "dominio_fonte": "infomoney.com.br",
+      "data_publicacao": "2024-02-27",
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Totvs investe na Cromai, que usa IA para identificar ervas daninhas",
+      "conteudo_texto": "O artigo detalha que o algoritmo da Cromai foi treinado com mais de 100 milhões de fotos de plantas daninhas, analisando iluminação e variações do solo em seis camadas analíticas. Um estudo de caso citado cobre 59 mil hectares, identificando infestação de folhas largas em 28% da área e gerando mapas georreferenciados que teriam reduzido em 72% o custo de manejo de pragas.",
+      "url_fonte": "https://braziljournal.com/totvs-investe-na-cromai-que-usa-ia-para-identificar-ervas-daninhas/",
+      "dominio_fonte": "braziljournal.com",
+      "data_publicacao": "2024-02-27",
+      "data_acesso": "2026-08-26"
+    }
+  ]
+}

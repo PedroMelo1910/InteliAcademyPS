@@ -1,0 +1,40 @@
+{
+  "nome": "Asaas",
+  "site": "https://www.asaas.com/",
+  "setor": "Fintech",
+  "estagio": "série C",
+  "localizacao": "Joinville, SC",
+  "descricao_curta": "Plataforma brasileira de automação financeira para pequenas e médias empresas, com emissão de cobranças, gestão de inadimplência e um assistente de IA (Ian) operado via WhatsApp.",
+  "ano_fundacao": 2010,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Ian, a Inteligência Artificial para Negócios do Asaas",
+      "conteudo_texto": "A página de materiais do Asaas apresenta o Ian, descrito como a inteligência artificial para negócios da empresa, funcionando como assistente financeiro integrado ao WhatsApp. Segundo a página, o Ian permite pagamentos via Pix e boleto, emissão de cobranças e consulta de saldo diretamente por mensagens, estando descrito como em aprendizado contínuo à medida que interage com o usuário. O rodapé da página traz o endereço da sede, na Avenida Rolf Wiest, no bairro Bom Retiro, em Joinville, Santa Catarina, junto ao CNPJ da instituição de pagamento.",
+      "url_fonte": "https://materiais.asaas.com/ian",
+      "dominio_fonte": "materiais.asaas.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Brazilian startup Asaas raised R$820M to fund acquisitions",
+      "conteudo_texto": "O artigo da Axios Pro, publicado em 9 de outubro de 2024, confirma que o Asaas captou R$820 milhões (cerca de US$148 milhões) em uma rodada Série C, com o objetivo declarado de financiar aquisições (M&A) para expandir a suíte de produtos financeiros da empresa voltada a pequenas e médias empresas brasileiras.",
+      "url_fonte": "https://www.axios.com/pro/fintech-deals/2024/10/09/brazilian-smb-finance-startup-asaas-raises",
+      "dominio_fonte": "axios.com",
+      "data_publicacao": "2024-10-09",
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "blog",
+      "titulo": "Asaas — centro de conhecimento Adyen",
+      "conteudo_texto": "A página da Adyen descreve o Asaas como fintech brasileira de automação financeira para PMEs, fundada em 2010 e autorizada pelo Banco Central como a 31ª instituição de pagamentos do país. O texto cita a parceria de processamento de cartões com a Adyen, incluindo a tecnologia Network Token Optimization, que usa inteligência artificial para aumentar taxas de aprovação de transações.",
+      "url_fonte": "https://www.adyen.com/pt_BR/centro-de-conhecimento/asaas",
+      "dominio_fonte": "adyen.com",
+      "data_publicacao": "2024-11-18",
+      "data_acesso": "2026-08-26"
+    }
+  ]
+}
