@@ -1,0 +1,40 @@
+{
+  "nome": "Pipefy",
+  "site": "https://www.pipefy.com/",
+  "setor": "Software / automação",
+  "estagio": "série C",
+  "localizacao": "São Francisco, CA, EUA",
+  "descricao_curta": "Plataforma SaaS de orquestração e automação de processos de negócio que combina workflows no-code com agentes de inteligência artificial.",
+  "ano_fundacao": 2015,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Pipefy: Agentes de IA para Automação de Processos",
+      "conteudo_texto": "A página oficial em português posiciona a Pipefy como plataforma unificada para orquestração e automação de processos de negócio, combinando workflows no-code e agentes de inteligência artificial descritos como capazes de analisar, otimizar e evoluir processos de forma contínua. A oferta é organizada em torno da digitalização de processos corporativos por usuários de negócio.",
+      "url_fonte": "https://www.pipefy.com/pt-br/",
+      "dominio_fonte": "pipefy.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Softbank lidera aporte de US$ 75 milhões para Pipefy conquistar a América",
+      "conteudo_texto": "A reportagem de outubro de 2021 informa que a Pipefy foi fundada por Alessio Alionço, em Curitiba, em 2015, e que naquele momento mantinha sede em São Francisco, na Califórnia. Registra aporte série C de US$ 75 milhões liderado pelo Softbank Latin America Fund e descreve o modelo de negócio como SaaS, com cobrança de valor mensal por usuário da plataforma.",
+      "url_fonte": "https://neofeed.com.br/startups/softbank-lidera-aporte-de-us-75-milhoes-para-pipefy-conquistar-a-america/",
+      "dominio_fonte": "neofeed.com.br",
+      "data_publicacao": "2021-10-26",
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "SoftBank lidera série C de US$ 75 milhões no potencial unicórnio Pipefy",
+      "conteudo_texto": "A matéria da mesma data confirma a conclusão da série C de US$ 75 milhões e descreve a Pipefy como empresa curitibana fundada em 2015, com sede também em São Francisco, na Califórnia. Apresenta a plataforma como ferramenta para criar e implantar fluxos de trabalho que reduzem atrasos, comercializada com valor mensal por usuário somado a cobrança por automação.",
+      "url_fonte": "https://startups.com.br/negocios/softbank-lidera-serie-c-de-us-75-milhoes-no-potencial-unicornio-pipefy/",
+      "dominio_fonte": "startups.com.br",
+      "data_publicacao": "2021-10-26",
+      "data_acesso": "2026-08-27"
+    }
+  ]
+}
