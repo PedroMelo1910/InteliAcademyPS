@@ -1,0 +1,40 @@
+{
+  "nome": "Kryptus",
+  "site": "https://kryptus.com/",
+  "setor": "Cibersegurança e criptografia",
+  "estagio": "não divulgado",
+  "localizacao": "Campinas, SP",
+  "descricao_curta": "Empresa brasileira de criptografia e cibersegurança que desenvolve hardware e serviços para aplicações críticas e projetos baseados em IA, incluindo defesa cibernética autônoma e contrainteligência.",
+  "ano_fundacao": 2003,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "release",
+      "titulo": "Kryptus é selecionada para desenvolver o primeiro sistema autônomo inteligente de defesa cibernética brasileiro",
+      "conteudo_texto": "O release informa que a Kryptus liderou a proposta do projeto Typhon para desenvolver um sistema autônomo de defesa cibernética voltado à proteção de informações e redes sensíveis. A proposta prevê o uso de inteligência artificial para detectar incidentes e atuar de maneira autônoma, combinado a recursos de segurança e criptografia pós-quântica.",
+      "url_fonte": "https://kryptus.com/kryptus-e-selecionada-para-desenvolver-o-primeiro-sistema-autonomo-inteligente-de-defesa-cibernetica-brasileiro/",
+      "dominio_fonte": "kryptus.com",
+      "data_publicacao": "2023-01-18",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Certificação FIPS coloca Kryptus no mercado global de HSMs",
+      "conteudo_texto": "A reportagem especializada descreve a certificação FIPS 140-2 obtida pelo módulo de segurança em hardware kNET, usado para armazenar e proteger chaves criptográficas. O texto identifica a Kryptus como empresa sediada em Campinas, atuante desde 2003, e registra o uso de seu equipamento na infraestrutura da ICP-Brasil.",
+      "url_fonte": "https://www.cisoadvisor.com.br/certificacao-fips-coloca-kryptus-no-mercado-global-de-hsms/",
+      "dominio_fonte": "cisoadvisor.com.br",
+      "data_publicacao": "2020-02-08",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Perto adquire HSM da Kryptus",
+      "conteudo_texto": "A notícia relata o fornecimento de um módulo de segurança em hardware da Kryptus para proteger e gerenciar chaves criptográficas em equipamentos de autoatendimento da Perto. O texto confirma que a Kryptus foi fundada em 2003, tem sede em Campinas e possui reconhecimento como Empresa Estratégica de Defesa.",
+      "url_fonte": "https://www.baguete.com.br/noticias/perto-adquire-hsm-da-kryptus",
+      "dominio_fonte": "baguete.com.br",
+      "data_publicacao": "2021-11-11",
+      "data_acesso": "2026-08-28"
+    }
+  ]
+}

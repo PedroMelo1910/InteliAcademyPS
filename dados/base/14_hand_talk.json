@@ -1,0 +1,40 @@
+{
+  "nome": "Hand Talk",
+  "site": "https://www.handtalk.me/br/",
+  "setor": "Acessibilidade digital",
+  "estagio": "adquirida",
+  "localizacao": "Maceió, AL",
+  "descricao_curta": "Empresa brasileira de acessibilidade digital que usa inteligência artificial e avatares 3D em um aplicativo e um plugin para traduzir conteúdos digitais para Libras e ASL.",
+  "ano_fundacao": 2012,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Hand Talk — Tecnologias de acessibilidade digital em línguas de sinais",
+      "conteudo_texto": "A Hand Talk oferece um plugin de acessibilidade para sites e um aplicativo que traduz textos, áudios e imagens para Libras e ASL por meio de avatares virtuais. A página institucional informa que seus recursos assistivos empregam inteligência artificial e apresenta soluções voltadas a empresas e usuários.",
+      "url_fonte": "https://www.handtalk.me/br/",
+      "dominio_fonte": "handtalk.me",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "A tecnologia de Maceió que já traduziu 3 bilhões de palavras — e agora vai ser global",
+      "conteudo_texto": "A reportagem registra que a Hand Talk foi fundada em 2012, em Maceió, por Ronaldo Tenório, Carlos Wanderlan e Thadeu Luz. O texto informa que a empresa incorpora inteligência artificial ao tradutor desde 2016 e que foi adquirida pela norte-americana Sorenson em janeiro de 2025.",
+      "url_fonte": "https://exame.com/negocios/a-tecnologia-de-maceio-que-ja-traduziu-3-bilhoes-de-palavras-e-agora-vai-ser-global/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2025-09-02",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Startup brasileira lança técnica que traduz línguas de sinais para voz",
+      "conteudo_texto": "A matéria descreve o lançamento do Hand Talk Motion, tecnologia que usa inteligência artificial e reconhecimento de movimentos para converter sinais em áudio. Segundo a reportagem, a solução foi apresentada após mais de dois anos de pesquisa e conseguia reconhecer sequências de sinais mais longas.",
+      "url_fonte": "https://canaltech.com.br/startup/startup-brasileira-lanca-tecnica-que-traduz-linguas-de-sinais-para-voz-192689/",
+      "dominio_fonte": "canaltech.com.br",
+      "data_publicacao": "2021-08-13",
+      "data_acesso": "2026-08-28"
+    }
+  ]
+}
