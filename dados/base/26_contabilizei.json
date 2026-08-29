@@ -1,0 +1,40 @@
+{
+  "nome": "Contabilizei",
+  "site": "https://www.contabilizei.com.br/",
+  "setor": "Contabilidade digital para micro e pequenas empresas",
+  "estagio": "não divulgado",
+  "localizacao": "Curitiba, PR",
+  "descricao_curta": "Serviço de contabilidade online para micro e pequenas empresas que combina plataforma digital, contadores certificados e recursos de IA e machine learning em organização financeira, cálculo de impostos, detecção de inconsistências e atendimento.",
+  "ano_fundacao": 2013,
+  "tamanho_time": "mais de 1.200 (autodeclarado na página de carreiras)",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "blog",
+      "titulo": "Contabilidade Digital: Como funciona e quais vantagens?",
+      "conteudo_texto": "O artigo institucional explica que a Contabilizei combina plataforma de contabilidade online com suporte humano especializado e declara atender mais de 100 mil clientes. A empresa informa mais de 100 contadores certificados e 1.700 especialistas. O texto afirma que usa inteligência artificial e machine learning na organização financeira e contábil, no cálculo de impostos, na detecção de erros e inconsistências e no atendimento ao cliente.",
+      "url_fonte": "https://www.contabilizei.com.br/contabilidade-online/contabilidade-digital/",
+      "dominio_fonte": "contabilizei.com.br",
+      "data_publicacao": "2026-04-27",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "vaga",
+      "titulo": "Carreiras — Contabilizei",
+      "conteudo_texto": "A página de carreiras descreve a Contabilizei como empresa de soluções digitais para micro e pequenos empreendedores e declara mais de 70 mil clientes e um time superior a 1.200 pessoas. O material informa trabalho remoto e híbrido, com escritórios em São Paulo e Curitiba. A página afirma que a empresa automatiza processos contábeis e usa IA em atendimento e vendas, lista Java, Node.js, Kotlin, Google Cloud Platform, PostgreSQL, Kubernetes, SQL, Python, Looker, Spring Boot, React e Pinecone e apresenta o programa interno Impulsiona IA.",
+      "url_fonte": "https://carreira.inhire.com.br/carreiras/contabilizei/",
+      "dominio_fonte": "carreira.inhire.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Contabilizei recebe aporte de R$ 320 mi liderado pelo SoftBank",
+      "conteudo_texto": "A reportagem informa que a Contabilizei recebeu aporte de R$ 320 milhões liderado pelo SoftBank, com participação de Goldman Sachs e Pruven Capital. O texto registra fundação em 2013 e sede em Curitiba (PR), além de mais de 30 mil clientes distribuídos em mais de 60 municípios na data da publicação. Segundo a matéria, a empresa contava com cerca de 900 pessoas e projetava ultrapassar 1.300 até o fim daquele ano. A publicação descreve o uso previsto dos recursos em aquisições de startups complementares, ampliação da equipe, abertura de lojas físicas e expansão da oferta para contas bancárias, cobrança, contas a pagar e planos de saúde. A matéria não nomeia a série da rodada.",
+      "url_fonte": "https://investnews.com.br/negocios/contabilizei-recebe-aporte-do-softbank/",
+      "dominio_fonte": "investnews.com.br",
+      "data_publicacao": "2022-03-10",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}

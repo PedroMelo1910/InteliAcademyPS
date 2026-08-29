@@ -1,0 +1,40 @@
+{
+  "nome": "Sólides",
+  "site": "https://solides.com.br/",
+  "setor": "Gestão de pessoas e RH (HR tech)",
+  "estagio": "não divulgado",
+  "localizacao": "Belo Horizonte, MG",
+  "descricao_curta": "Plataforma de gestão de pessoas para pequenas e médias empresas que integra recrutamento, ponto, folha e mapeamento comportamental próprio, com uma camada de assistentes de IA nas rotinas de RH.",
+  "ano_fundacao": 2010,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Sistema de RH e DP Completo: Economize até 40% | Sólides",
+      "conteudo_texto": "A página institucional apresenta a Sólides como plataforma integrada de gestão de pessoas, RH e departamento pessoal, cobrindo recrutamento, admissão digital, ponto, folha, gestão comportamental, desenvolvimento, engajamento e benefícios. A empresa declara mais de 55 mil clientes. A página descreve IA preditiva para combinar vagas e candidatos, Copilot integrado do recrutamento à retenção, triagem automatizada, sugestões de ações de clima e eNPS, Radar de Rotatividade e mais de 40 soluções de IA conectadas às rotinas de RH e departamento pessoal. Também apresenta o Profiler como metodologia própria de mapeamento comportamental e painéis de people analytics.",
+      "url_fonte": "https://solides.com.br/",
+      "dominio_fonte": "solides.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Sólides, HR Tech para PMEs, mira faturamento de R$ 1 bilhão para 2028; conheça",
+      "conteudo_texto": "A reportagem trata da trajetória de Mônica Hauck, CEO e cofundadora da Sólides ao lado de Alessandro Garcia, e da meta da empresa de alcançar R$ 1 bilhão de faturamento até 2028. O texto informa fundação em 2010 e cerca de 40 mil clientes na data da publicação. A matéria descreve a Sólides como HR tech voltada a pequenas e médias empresas e detalha a superação de uma crise operacional enfrentada em 2014. A publicação não apresenta números de faturamento atual nem de quadro de pessoal.",
+      "url_fonte": "https://www.infomoney.com.br/business/solides-hr-tech-para-pmes-mira-faturamento-de-r-1-bilhao-para-2028-conheca/",
+      "dominio_fonte": "infomoney.com.br",
+      "data_publicacao": "2025-10-11",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Sólides vai às compras e faz 1ª aquisição depois de aporte de R$ 530 milhões",
+      "conteudo_texto": "A matéria informa que a Sólides anunciou a aquisição da Tangerino, startup de controle de ponto digital com soluções para folha e departamento pessoal, em sua primeira compra desde o aporte de R$ 530 milhões recebido da gestora americana Warburg Pincus. O texto registra fundação em 2010, sede em Belo Horizonte (MG) e os cofundadores Mônica Hauck e Alessandro Garcia. Segundo a publicação, a base combinada passaria a cerca de 20 mil empresas clientes, com a incorporação de 115 funcionários da Tangerino, que atendia perto de 8 mil empresas e registrava mais de 2 milhões de marcações de ponto por dia. A reportagem cita a Sólides Academy, lançada em fevereiro de 2022, planos de distribuição de folha apoiados por inteligência artificial e o reconhecimento facial do aplicativo da Tangerino integrado à folha.",
+      "url_fonte": "https://neofeed.com.br/startups/solides-vai-as-compras-e-faz-1a-aquisicao-depois-de-aporte-de-r-530-milhoes/",
+      "dominio_fonte": "neofeed.com.br",
+      "data_publicacao": "2022-04-12",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}
