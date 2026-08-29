@@ -1,0 +1,40 @@
+{
+  "nome": "Colab",
+  "site": "https://www.colab.com.br/",
+  "setor": "GovTech",
+  "estagio": "não divulgado",
+  "localizacao": null,
+  "descricao_curta": "Govtech brasileira que conecta cidadãos e prefeituras por aplicativo e web para reporte de demandas, consultas públicas e serviços municipais, e opera o Colab Gov.AI, ferramenta de IA generativa construída em parceria com a AWS.",
+  "ano_fundacao": 2013,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Colab — sou cidadão",
+      "conteudo_texto": "A página institucional voltada ao cidadão apresenta o Colab como plataforma digital, disponível em aplicativo iOS e Android e por acesso web, que centraliza serviços municipais e participação cívica. As funcionalidades descritas incluem agendar serviços, reportar demandas urbanas, emitir documentos e participar ativamente das decisões da cidade, com menção a municípios parceiros como Niterói. O endereço colab.re redireciona para este domínio, motivo pelo qual a URL canônica registrada é colab.com.br. Esta página específica não menciona inteligência artificial.",
+      "url_fonte": "https://www.colab.com.br/sou-cidadao/",
+      "dominio_fonte": "colab.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Colab, govtech brasileira, prepara captação de US$ 10 milhões com ferramenta de IA para setor público",
+      "conteudo_texto": "A reportagem de 29 de outubro de 2025 informa que o Colab planeja captar mais de US$ 10 milhões no início de 2026, tratando-se portanto de um plano anunciado e não de rodada concluída. O texto registra a fundação em 2013 por Gustavo Maia e Paulo Pandolfi e cerca de R$ 25 milhões já recebidos de investidores como MDIF, Luminate, EDP Ventures e KPTL. Apresenta ainda o Colab Gov.AI, ferramenta de inteligência artificial generativa criada em parceria com a Amazon Web Services, com arquitetura multiagente e multimodal, que teria reduzido o tempo médio de desenvolvimento de um serviço de três horas para dez minutos, queda de 94% no ciclo de produção.",
+      "url_fonte": "https://startupi.com.br/colab-govtech-prepara-captacao-us-10-milhoes/",
+      "dominio_fonte": "startupi.com.br",
+      "data_publicacao": "2025-10-29",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "blog",
+      "titulo": "Como o Colab e a AWS Aceleraram a Criação de Serviços Públicos com No-Code e IA Generativa",
+      "conteudo_texto": "O artigo do blog da AWS Brasil, de 7 de novembro de 2025, descreve a plataforma em que gestores públicos criam fluxos de serviços digitais sem conhecimento técnico profundo, combinando interface conversacional com inteligência artificial generativa e orquestração visual baseada em BPMN. A arquitetura apoia-se no Amazon Bedrock, com Bedrock Guardrails, AWS IAM, AWS Athena e Amazon Data Firehose. Os resultados relatados incluem queda do tempo de criação de um serviço de aproximadamente três horas para dez minutos, mais de 5.000 prompts executados no primeiro mês de uso e média de quatro novos serviços por cliente a cada mês, com a solução operando em dezenas de cidades e estados brasileiros.",
+      "url_fonte": "https://aws.amazon.com/pt/blogs/aws-brasil/como-o-colab-e-a-aws-aceleraram-a-criacao-de-servicos-publicos-com-no-code-e-ia-generativa/",
+      "dominio_fonte": "aws.amazon.com",
+      "data_publicacao": "2025-11-07",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}

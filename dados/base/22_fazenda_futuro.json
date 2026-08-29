@@ -1,0 +1,40 @@
+{
+  "nome": "Fazenda Futuro",
+  "site": "https://www.fazendafuturo.io/",
+  "setor": "Alimentos plant-based",
+  "estagio": "não divulgado",
+  "localizacao": null,
+  "descricao_curta": "Foodtech brasileira de alimentos plant-based que desenvolveu o Futuro Burger a partir da análise, com apoio de inteligência artificial, das melhores combinações de proteínas e lipídios de origem vegetal.",
+  "ano_fundacao": 2019,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "notícia",
+      "titulo": "Lembra da Fazenda Futuro? Depois do hype da carne vegetal, empresa tenta um recomeço mais pé no chão",
+      "conteudo_texto": "A reportagem de 29 de julho de 2025 recapitula a trajetória da Fazenda Futuro, fundada em 2019 por Marcos Leta e Alfredo Strechinsky, que captou R$ 300 milhões no fim de 2021, com participação do BTG Pactual, e chegou a ser avaliada em R$ 2,2 bilhões no auge. O texto descreve a retração da operação internacional, antes presente no Reino Unido, Chile, Austrália e Estados Unidos, o retorno do foco ao Brasil, a recompra de participação pelos fundadores em meados de 2024 e uma operação mais enxuta e menos dependente de capital externo, com presença em cerca de 20 mil pontos de venda.",
+      "url_fonte": "https://investnews.com.br/negocios/fazenda-futuro-retomada-plant-based/",
+      "dominio_fonte": "investnews.com.br",
+      "data_publicacao": "2025-07-29",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Fazenda Futuro reformula produtos para melhor sabor e textura",
+      "conteudo_texto": "A matéria de 22 de fevereiro de 2024 detalha a reformulação da linha da Fazenda Futuro em busca de sabor e textura mais próximos da carne animal e cita a True Texture Technology, descrita na reportagem como uma língua artificial que captura o sabor do alimento e acompanha o processo de hidratação e mistura de proteínas. A fonte descreve essa tecnologia como uma língua artificial sensorial, mas não esclarece se esse componente específico utiliza inteligência artificial; o sinal de IA da empresa é sustentado separadamente pela reportagem da Pesquisa FAPESP. A diretora afirma que nada é feito em laboratório e que nenhuma molécula artificial é usada na produção, e o plano Fazenda Futuro 2.0 prevê queijo, mel e bacon de origem vegetal.",
+      "url_fonte": "https://veganbusiness.com.br/fazenda-futuro-reformula-produtos-para-melhor-sabor-e-textura/",
+      "dominio_fonte": "veganbusiness.com.br",
+      "data_publicacao": "2024-02-22",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Bife de laboratório",
+      "conteudo_texto": "A reportagem da revista Pesquisa FAPESP, edição 281, de julho de 2019, sem dia exato informado na página, trata do avanço das proteínas alternativas e afirma explicitamente que o resultado alcançado pela Fazenda Futuro no Futuro Burger foi obtido por meio da análise, com a ajuda de inteligência artificial, das melhores combinações de proteínas e lipídios de origem vegetal. Essa é a evidência que sustenta a classificação AI-enabled, já que a inteligência artificial aparece no desenvolvimento do produto da própria empresa e não nas demais companhias citadas no texto, como Beyond Meat, Impossible Foods, Mosa Meat, Aleph Farms e Memphis Meats.",
+      "url_fonte": "https://revistapesquisa.fapesp.br/bife-de-laboratorio-2/",
+      "dominio_fonte": "revistapesquisa.fapesp.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}

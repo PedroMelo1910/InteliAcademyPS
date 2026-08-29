@@ -1,0 +1,40 @@
+{
+  "nome": "SoluBio",
+  "site": "https://www.solubio.agr.br/",
+  "setor": "Agronegócio",
+  "estagio": "não divulgado",
+  "localizacao": "Jataí, GO",
+  "descricao_curta": "Empresa de bioinsumos que instala biofábricas nas próprias fazendas dos clientes, fornecendo equipamentos, microrganismos, controle de qualidade, treinamento e assistência técnica pelo sistema integrado de manejo OnFarm.",
+  "ano_fundacao": 2016,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "SoluBio — biofábricas OnFarm para produção de bioinsumos",
+      "conteudo_texto": "O site institucional apresenta a SoluBio como fornecedora de tecnologia integrada de biofábricas dentro da fazenda, com padrão industrial, e informa endereço na Rodovia GO-184, em Jataí, Goiás. A empresa declara atender mais de 2.000.000 de hectares de lavouras com o sistema integrado Manejo OnFarm e fornecer equipamentos, insumos, controle de qualidade, treinamento e assistência técnica para que o produtor fabrique o próprio bioinsumo, com aplicação em soja, milho, trigo, algodão, cana-de-açúcar e café. O núcleo tecnológico descrito é biológico e operacional, baseado em biofábricas, insumos, controle de qualidade, treinamento e assistência técnica.",
+      "url_fonte": "https://www.solubio.agr.br/",
+      "dominio_fonte": "solubio.agr.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "SoluBio capta R$ 13,5 milhões e se prepara para acelerar a expansão do seu modelo de negócios",
+      "conteudo_texto": "A reportagem de 7 de maio de 2021 informa a captação de R$ 13,5 milhões pela SoluBio na modalidade Venture Debt, sem diluição societária, destinada sobretudo a investimento em CAPEX, conforme declaração do COO Maurício Schneider. O texto registra a fundação da empresa em 2016 e a nova fábrica em Jataí, Goiás, e descreve a solução integrada que permite ao agricultor produzir insumos biológicos na própria fazenda pelo manejo OnFarm, reduzindo ineficiências logísticas ligadas a intermediários na cadeia tradicional de defensivos. O artigo não classifica a rodada como série A, série B ou qualquer estágio de equity.",
+      "url_fonte": "https://startupi.com.br/solubio-capta-r-135-milhoes-e-se-prepara-para-acelerar-a-expansao-do-seu-modelo-de-negocios/",
+      "dominio_fonte": "startupi.com.br",
+      "data_publicacao": "2021-05-07",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Aqua Capital adquire fatia na SoluBio para ampliar negócios de bioinsumos",
+      "conteudo_texto": "A matéria de 29 de agosto de 2022 registra que a gestora de private equity Aqua Capital adquiriu uma fatia minoritária relevante da SoluBio, sem divulgação de valor ou percentual. O texto descreve o modelo em que agricultores instalam biofábricas nas fazendas para produzir os próprios bioinsumos, com soluções voltadas à regeneração de solo, ao controle de pragas e doenças e a promotores de crescimento. Private equity aparece aqui como tipo do investidor, e não como estágio declarado da empresa, razão pela qual o estágio permanece não divulgado.",
+      "url_fonte": "https://forbes.com.br/forbes-agro/2022/08/aqua-capital-adquire-fatia-na-solubio-para-ampliar-negocios-de-bioinsumos/",
+      "dominio_fonte": "forbes.com.br",
+      "data_publicacao": "2022-08-29",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}

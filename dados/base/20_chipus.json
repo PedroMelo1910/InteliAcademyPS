@@ -1,0 +1,40 @@
+{
+  "nome": "Chipus",
+  "site": "https://www.chipus.com.br/",
+  "setor": "Semicondutores e microeletrônica",
+  "estagio": "não divulgado",
+  "localizacao": "Florianópolis, SC",
+  "descricao_curta": "Scaleup catarinense de semicondutores, originada em incubadora, que projeta ASICs de sinais mistos, blocos de propriedade intelectual e serviços de projeto de circuitos integrados para clientes na Ásia, Europa e Estados Unidos.",
+  "ano_fundacao": 2008,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Chipus Microeletrônica — portal público de carreiras",
+      "conteudo_texto": "O portal público de carreiras da Chipus Microeletrônica S.A. descreve a empresa como desenvolvedora de ASICs de sinais mistos, blocos de propriedade intelectual e serviços de projeto de circuitos integrados, incluindo projetos digitais entregues em tecnologias FINFET. A página informa sede em Florianópolis, subsidiária norte-americana no Vale do Silício e equipes de vendas nos Estados Unidos e na Europa, e registra que não havia vagas abertas no momento da consulta. O conteúdo técnico da página se concentra em engenharia de semicondutores, ASICs e blocos de propriedade intelectual.",
+      "url_fonte": "https://chipus.enlizt.me/",
+      "dominio_fonte": "chipus.enlizt.me",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "vaga",
+      "titulo": "Vagas de estágio na Chipus Microeletrônica S.A. junto ao laboratório ECL/UFSC",
+      "conteudo_texto": "A publicação do Departamento de Informática e Estatística da UFSC, de 8 de janeiro de 2025, anuncia duas vagas de estágio de 20 horas semanais em parceria entre a Chipus Microeletrônica e o Embedded Computing Lab, com bolsa de R$ 1.424,50, auxílio alimentação e transporte e regime híbrido. O texto descreve a Chipus como especializada em ASICs, blocos de propriedade intelectual e serviços de projeto de circuitos integrados, com certificação ISO 9001:2015 e sede em Florianópolis, e lista como requisitos ferramentas de projeto industriais, Linux, linguagens de script como Tcl e Python e circuitos digitais.",
+      "url_fonte": "https://ine.ufsc.br/2025/01/08/vagas-de-estagio-na-chipus-microeletronica-s-a-junto-ao-laboratorio-eclufsc/",
+      "dominio_fonte": "ine.ufsc.br",
+      "data_publicacao": "2025-01-08",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Empresa brasileira de semicondutores é destaque na imprensa nacional",
+      "conteudo_texto": "A notícia publicada pela ABISEMI, sem data visível na página, registra que a Chipus foi fundada com capital 100% nacional no final de 2008 e permaneceu cerca de três anos, a partir de 2009, na incubadora MIDI Tecnológico, gerida pela ACATE e pelo SEBRAE-SC. Os números citados são históricos e correspondem ao período da reportagem: expectativa de faturar R$ 8 milhões no ano, quatro vezes o valor alcançado até 2016, carteira de dez clientes internacionais baseados essencialmente na Ásia, Europa e Estados Unidos e portfólio de mais de 200 blocos de propriedade intelectual, além de escritório em Brasília e representantes em São Paulo e na Europa.",
+      "url_fonte": "https://www.abisemi.org.br/abisemi/noticia/37/empresa-brasileira-de-semicondutores-e-destaque-na-imprensa-nacional",
+      "dominio_fonte": "abisemi.org.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}
