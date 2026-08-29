@@ -1,0 +1,40 @@
+{
+  "nome": "Caju",
+  "site": "https://www.caju.com.br/",
+  "setor": "Fintech / RH",
+  "estagio": "série B",
+  "localizacao": "São Paulo, SP",
+  "descricao_curta": "Plataforma brasileira para gestão de benefícios, despesas corporativas e rotinas de pessoas, integrada a cartão e aplicativo.",
+  "ano_fundacao": 2019,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "A Caju traz mais sabor e leveza à vida profissional",
+      "conteudo_texto": "A Caju descreve seu produto como um sistema de soluções para a jornada corporativa, reunindo admissão, gestão de benefícios, departamento pessoal, despesas e premiações. A operação inclui cartão, aplicativo e painéis para empresas e colaboradores. A companhia também informa que é uma instituição de pagamento autorizada pelo Banco Central do Brasil, sujeita às regras aplicáveis à emissão de moeda eletrônica e instrumento pós-pago. A proposta apresentada é automatizar e centralizar rotinas de recursos humanos e pagamentos corporativos, sem declarar a inteligência artificial como núcleo do produto nesta fonte.",
+      "url_fonte": "https://www.caju.com.br/a-caju/a-caju",
+      "dominio_fonte": "caju.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Startup de benefícios corporativos Caju recebe US$ 25 milhões em Série B",
+      "conteudo_texto": "A Bloomberg Línea noticiou em agosto de 2022 uma rodada Série B de 25 milhões de dólares da Caju. A reportagem descreve a empresa como startup brasileira de benefícios corporativos flexíveis e explica que seu cartão Visa permite usar saldos em categorias como alimentação, refeição, transporte e cultura. O capital seria usado para desenvolver novos produtos e ampliar a equipe, inclusive em tecnologia. Naquele momento, a empresa declarava 11 mil clientes corporativos e 190 pessoas na equipe, dados históricos que não devem ser tratados como números atuais.",
+      "url_fonte": "https://www.bloomberglinea.com.br/2022/08/31/startup-de-beneficios-corporativos-caju-recebe-us-25-milhoes-em-serie-b/",
+      "dominio_fonte": "bloomberglinea.com.br",
+      "data_publicacao": "2022-08-31",
+      "data_acesso": "2026-08-24"
+    },
+    {
+      "tipo": "release",
+      "titulo": "Caju — ONEVC Portfolio",
+      "conteudo_texto": "A ONEVC apresenta a Caju como uma fintech de recursos humanos sediada no Brasil. O perfil informa que a empresa começou com um cartão de benefícios flexíveis e pretende ampliar a experiência de colaboradores e equipes de RH por meio de benefícios e operações de pessoas. A fonte registra fundação em 2019, sede em São Paulo e os fundadores Eduardo del Giglio e Renan Mendes. Como perfil de investidor, complementa o material institucional e a notícia de rodada sem substituir essas fontes.",
+      "url_fonte": "https://www.onevc.vc/portfolio/caju",
+      "dominio_fonte": "onevc.vc",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-24"
+    }
+  ]
+}
