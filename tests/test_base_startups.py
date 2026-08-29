@@ -1,7 +1,10 @@
 import sqlite3
 
+import pytest
+
 from radar.base_startups import (
     BaseStartups,
+    ErroDocumentosStartup,
     carregar_curadoria,
     inicializar_banco,
     montar_consulta_descoberta,
@@ -92,3 +95,76 @@ def test_retriever_funciona_offline_com_plano_fixo(base: BaseStartups):
         "bloomberglinea.com.br",
         "onevc.vc",
     }
+
+
+# --------------------------------------------------------------------------
+# Carga determinística dos documentos completos (fronteira do Extractor).
+# --------------------------------------------------------------------------
+
+
+def documentos_de_duas_startups(caminho_banco):
+    with sqlite3.connect(caminho_banco) as conexao:
+        conexao.row_factory = sqlite3.Row
+        primeira = conexao.execute(
+            "SELECT startup_id, id FROM documentos ORDER BY startup_id, id"
+        ).fetchall()
+    agrupado: dict[int, list[int]] = {}
+    for linha in primeira:
+        agrupado.setdefault(linha["startup_id"], []).append(linha["id"])
+    ids_startups = sorted(agrupado)
+    return ids_startups[0], agrupado[ids_startups[0]], ids_startups[1], agrupado[ids_startups[1]]
+
+
+def test_carregar_documentos_preserva_ids_ordem_e_conteudo(base: BaseStartups, caminho_banco):
+    id_startup, ids, _, _ = documentos_de_duas_startups(caminho_banco)
+    pedidos = list(reversed(ids))
+    documentos = base.carregar_documentos(id_startup, pedidos)
+    assert [documento.id_documento for documento in documentos] == pedidos
+    assert all(documento.id_startup == id_startup for documento in documentos)
+    assert all(documento.conteudo_texto.strip() for documento in documentos)
+    with sqlite3.connect(caminho_banco) as conexao:
+        esperado = conexao.execute(
+            "SELECT conteudo_texto FROM documentos WHERE id = ?", (pedidos[0],)
+        ).fetchone()[0]
+    assert documentos[0].conteudo_texto == esperado
+
+
+def test_carregar_documentos_nao_expoe_classe_referencia(base: BaseStartups, caminho_banco):
+    id_startup, ids, _, _ = documentos_de_duas_startups(caminho_banco)
+    documento = base.carregar_documentos(id_startup, ids[:1])[0]
+    assert "classe_referencia" not in documento.model_dump()
+
+
+def test_carregar_documentos_recusa_id_de_outra_startup(base: BaseStartups, caminho_banco):
+    id_startup, ids, outra, ids_outra = documentos_de_duas_startups(caminho_banco)
+    with pytest.raises(ErroDocumentosStartup, match="outra startup"):
+        base.carregar_documentos(id_startup, [ids[0], ids_outra[0]])
+    assert base.carregar_documentos(outra, ids_outra[:1])[0].id_startup == outra
+
+
+def test_carregar_documentos_recusa_id_inexistente(base: BaseStartups, caminho_banco):
+    id_startup, ids, _, _ = documentos_de_duas_startups(caminho_banco)
+    with pytest.raises(ErroDocumentosStartup, match="não existem"):
+        base.carregar_documentos(id_startup, [ids[0], 10**9])
+
+
+def test_carregar_documentos_recusa_ids_repetidos(base: BaseStartups, caminho_banco):
+    id_startup, ids, _, _ = documentos_de_duas_startups(caminho_banco)
+    with pytest.raises(ErroDocumentosStartup, match="repetidos"):
+        base.carregar_documentos(id_startup, [ids[0], ids[0]])
+
+
+def test_carregar_documentos_recusa_lista_vazia(base: BaseStartups, caminho_banco):
+    id_startup, _, _, _ = documentos_de_duas_startups(caminho_banco)
+    with pytest.raises(ErroDocumentosStartup, match="nenhum documento"):
+        base.carregar_documentos(id_startup, [])
+
+
+def test_carregar_documentos_mantem_a_entrada_em_parametros(base: BaseStartups, caminho_banco):
+    id_startup, ids, _, _ = documentos_de_duas_startups(caminho_banco)
+    hostil = "1); DROP TABLE documentos; --"
+    with pytest.raises(ErroDocumentosStartup):
+        base.carregar_documentos(id_startup, [hostil])
+    with sqlite3.connect(caminho_banco) as conexao:
+        assert conexao.execute("SELECT COUNT(*) FROM documentos").fetchone()[0] > 0
+    assert base.carregar_documentos(id_startup, ids[:1])[0].id_documento == ids[0]
