@@ -1,0 +1,40 @@
+{
+  "nome": "Grão Direto",
+  "site": "https://www.graodireto.com.br/",
+  "setor": "Agronegócio",
+  "estagio": "série B",
+  "localizacao": "Uberaba, MG",
+  "descricao_curta": "Agtech brasileira que opera uma plataforma digital de negociação de grãos entre produtores, cerealistas e tradings, com o assistente de inteligência artificial AIrton atendendo produtores por WhatsApp e transformando dados comerciais em análises de mercado.",
+  "ano_fundacao": 2018,
+  "tamanho_time": "51-200",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Grão Direto — plataforma de negociação de grãos e o assistente AIrton",
+      "conteudo_texto": "O site institucional apresenta a Grão Direto como plataforma digital de compra, venda e cotação de grãos, com foco em soja, milho e sorgo, e informa endereço na Avenida Santos Dumont, em Uberaba, Minas Gerais. A página descreve o AIrton como a inteligência artificial da empresa para negociações de grãos, atuando junto a produtores via WhatsApp e transformando dados comerciais em decisões para empresas e tradings, além do produto Grainsights, de inteligência de mercado construída sobre dados de negociações reais.",
+      "url_fonte": "https://www.graodireto.com.br/",
+      "dominio_fonte": "graodireto.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Grão Direto quer se tornar o mainstream digital no agro, diz CTO",
+      "conteudo_texto": "A reportagem de 24 de março de 2025 registra que a Grão Direto foi fundada em 2018, contava com cerca de 150 funcionários e projetava chegar a 200 até o fim do ano, e captou R$ 90 milhões em rodada série B com fundos ligados ao Bradesco, ao Chicago Board of Trade, à Endeavor e à Kaszek. O CTO Fred Marques detalha o AIrton, agente de inteligência artificial integrado ao WhatsApp que envia informações e análises de mercado, com média aproximada de 20 mensagens diárias por produtor, além de usos internos de IA em automação de processos, curadoria de mercado, calibragem de notificações e sumarização de documentos técnicos.",
+      "url_fonte": "https://www.mobiletime.com.br/noticias/24/03/2025/grao-direto-agro/",
+      "dominio_fonte": "mobiletime.com.br",
+      "data_publicacao": "2025-03-24",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Trade 24h por dia: a aposta da Grão Direto para quase dobrar o volume em 2026",
+      "conteudo_texto": "A matéria de 6 de fevereiro de 2026 informa que a plataforma movimentou 12 milhões de toneladas em 2025, contra 1 milhão em 2021, e que a meta para 2026 fica entre 18 milhões e 20 milhões de toneladas, apoiada em piloto que estende a janela de negociação das 10h30 às 15h30 para operação 24 horas por dia. O texto confirma fundação em 2018 em Uberaba, Minas Gerais, quadro de 174 funcionários, e descreve o agente de inteligência artificial AIrton fazendo o primeiro contato e buscando oportunidades com resumo de mercado e clima, além da expansão para barter, serviços financeiros, cartão de crédito e antecipação de recebíveis.",
+      "url_fonte": "https://www.theagribiz.com/agtechs/trade-24h-por-dia-a-aposta-da-grao-direto-para-quase-dobrar-o-volume-em-2026/",
+      "dominio_fonte": "theagribiz.com",
+      "data_publicacao": "2026-02-06",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}
