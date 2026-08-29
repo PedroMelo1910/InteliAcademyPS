@@ -1,0 +1,40 @@
+{
+  "nome": "Jusbrasil",
+  "site": "https://www.jusbrasil.com.br/",
+  "setor": "Jurídico",
+  "estagio": "não divulgado",
+  "localizacao": "Salvador, BA",
+  "descricao_curta": "Plataforma brasileira de informação jurídica que organiza material jurídico público e oferece o assistente Jus IA para pesquisa jurídica, redação de peças e conferência de referências.",
+  "ano_fundacao": 2008,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Sobre o Jusbrasil",
+      "conteudo_texto": "A página institucional apresenta o Jusbrasil como empresa brasileira de tecnologia fundada em 2008, na cidade de Salvador. Descreve a atuação em soluções voltadas à organização, à estruturação e à disponibilização de informações jurídicas públicas e abertas, com o objetivo declarado de dar acesso rápido à informação jurídica tanto ao público geral quanto a profissionais do direito.",
+      "url_fonte": "https://sobre.jusbrasil.com.br/",
+      "dominio_fonte": "sobre.jusbrasil.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Jusbrasil lança assistente de inteligência artificial para advogados",
+      "conteudo_texto": "A reportagem de março de 2025 registra o lançamento do Jus IA, assistente jurídico baseado em inteligência artificial generativa. Segundo o texto, a ferramenta reúne pesquisa apoiada em jurisprudência, geração de documentos jurídicos estruturados e verificação da validade de citações jurídicas, com supervisão de especialistas em processo descrito como Human-in-the-Loop. A publicação informa que o modelo foi desenvolvido em parceria com a Maritaca AI e cita, nessa data, base de mais de 1,2 bilhão de documentos.",
+      "url_fonte": "https://timesbrasil.com.br/empresas-e-negocios/tecnologia-e-inovacao/jusbrasil-inteligencia-artificial-advogados/",
+      "dominio_fonte": "timesbrasil.com.br",
+      "data_publicacao": "2025-03-25",
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Jusbrasil lança IA que promete transformar o direito brasileiro",
+      "conteudo_texto": "O artigo de novembro de 2025 detalha a arquitetura do assistente jurídico do Jusbrasil, baseada em Retrieval-Augmented Generation sobre acervo proprietário. Aponta como mecanismos de controle a indicação das fontes utilizadas em cada resposta, um processo automatizado de verificação das referências normativas citadas e a revisão contínua por um time de especialistas jurídicos. A publicação menciona, nessa data, acervo superior a 7 bilhões de documentos jurídicos.",
+      "url_fonte": "https://analise.com/noticias/jusbrasil-lanca-ia-que-promete-transformar-o-direito-brasileiro",
+      "dominio_fonte": "analise.com",
+      "data_publicacao": "2025-11-07",
+      "data_acesso": "2026-08-27"
+    }
+  ]
+}

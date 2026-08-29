@@ -1,4 +1,4 @@
-# NVIDIA Startup AI Radar — documentação de trabalho
+git # NVIDIA Startup AI Radar — documentação de trabalho
 
 Este arquivo reúne a documentação do projeto em um só lugar. Ele é um material de construção e compreensão; o README de entrega será escrito apenas quando o sistema estiver mais completo.
 

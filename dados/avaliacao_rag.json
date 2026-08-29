@@ -1,0 +1,18 @@
+{
+  "descricao": "Conjunto de avaliação da recuperação da KB NVIDIA. Cada caso liga uma consulta em linguagem de diagnóstico à tecnologia cuja fonte curada deveria aparecer no topo. Rótulos atribuídos manualmente a partir da leitura do corpus em conhecimento/fontes/ — nunca derivados da saída do próprio sistema. Amostra pequena: os números orientam iteração, não têm significância estatística.",
+  "metrica": "hit@6 (tecnologia esperada presente no top-6) e posição da primeira ocorrência, antes (fusão RRF) e depois do reranking",
+  "casos": [
+    {"consulta": "startup de call center com custo alto de transcrição de voz em APIs de terceiros", "tecnologia_esperada": "NVIDIA Riva"},
+    {"consulta": "empresa que depende só de API externa de LLM e quer auto-hospedar modelos com a mesma interface", "tecnologia_esperada": "NVIDIA NIM"},
+    {"consulta": "servir vários modelos de frameworks diferentes na mesma GPU com batching dinâmico", "tecnologia_esperada": "NVIDIA Triton Inference Server"},
+    {"consulta": "reduzir o custo de GPU e a latência de inferência de um LLM próprio com quantização", "tecnologia_esperada": "TensorRT-LLM"},
+    {"consulta": "pipeline de dados tabulares em pandas lento demais para o volume atual", "tecnologia_esperada": "cuDF"},
+    {"consulta": "acelerar o retreino de modelos clássicos de machine learning como florestas aleatórias", "tecnologia_esperada": "cuML"},
+    {"consulta": "controlar o comportamento de um chatbot em setor regulado e evitar respostas fora de escopo", "tecnologia_esperada": "NeMo Guardrails"},
+    {"consulta": "robôs autônomos de armazém precisam de simulação antes do deploy físico", "tecnologia_esperada": "NVIDIA Isaac"},
+    {"consulta": "healthtech de diagnóstico por imagem médica com dados sensíveis", "tecnologia_esperada": "NVIDIA Clara"},
+    {"consulta": "detecção de fraude em tempo real sobre volume gigante de eventos de telemetria", "tecnologia_esperada": "NVIDIA Morpheus"},
+    {"consulta": "startup em estágio inicial buscando créditos de nuvem e suporte técnico da NVIDIA", "tecnologia_esperada": "NVIDIA Inception"},
+    {"consulta": "fine-tuning de modelo de fundação com dados proprietários da empresa", "tecnologia_esperada": "NVIDIA NeMo"}
+  ]
+}

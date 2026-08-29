@@ -1,0 +1,40 @@
+{
+  "nome": "Tractian",
+  "site": "https://tractian.com/",
+  "setor": "Indústria",
+  "estagio": "série C",
+  "localizacao": "Atlanta, EUA",
+  "descricao_curta": "Empresa brasileira de manutenção preditiva industrial que combina sensores próprios e algoritmos patenteados (RPM Encoder, Auto Diagnosis) para prever falhas em máquinas antes que ocorram.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Tractian — AI-Powered Condition Monitoring",
+      "conteudo_texto": "A página institucional da Tractian descreve monitoramento de condição industrial baseado em sensores próprios e em tecnologia proprietária (RPM Encoder, Auto Diagnosis, Always Listening), citando um banco de 3,5 bilhões de amostras usado para treinar os algoritmos de detecção de falha. A sede informada é em Atlanta, nos Estados Unidos, atendendo setores como automotivo, manufatura, óleo e gás e mineração.",
+      "url_fonte": "https://tractian.com/en/solutions/condition-monitoring/ai-powered-condition-monitoring",
+      "dominio_fonte": "tractian.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Brazilian startup Tractian gets the Y Combinator seal of approval for its equipment monitoring tech",
+      "conteudo_texto": "A reportagem de março de 2021 descreve a Tractian como startup fundada por Igor Marinelli e Gabriel Lameirinhas, colegas da USP, com sensores que medem vibração, temperatura, consumo de energia e horímetro, acompanhados de software próprio de análise para prever manutenção. Cita cerca de 30 clientes pagantes, incluindo a AB InBev, aporte via Y Combinator, Soma Capital e Norte Ventures, com preço de US$90 por sensor mais US$60 mensais de assinatura.",
+      "url_fonte": "https://techcrunch.com/2021/03/19/brazilian-startup-tractian-gets-the-y-combinator-seal-of-approval-for-its-equipment-monitoring-tech/",
+      "dominio_fonte": "techcrunch.com",
+      "data_publicacao": "2021-03-19",
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Tractian nabs $120M to reduce industrial equipment downtime",
+      "conteudo_texto": "O artigo de dezembro de 2024 confirma uma rodada Série C de US$120 milhões liderada pela Sapphire Ventures, com General Catalyst, Next47 e NGP Capital, usada para expandir o sensor Smart Trac Ultra. O texto descreve modelos de inteligência artificial que refinam alertas de mau funcionamento considerando fatores ambientais e sazonais, apontando a causa provável das falhas detectadas.",
+      "url_fonte": "https://siliconangle.com/2024/12/05/tractian-nabs-120m-reduce-industrial-equipment-downtime/",
+      "dominio_fonte": "siliconangle.com",
+      "data_publicacao": "2024-12-05",
+      "data_acesso": "2026-08-26"
+    }
+  ]
+}

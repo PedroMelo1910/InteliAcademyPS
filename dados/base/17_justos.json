@@ -1,0 +1,40 @@
+{
+  "nome": "Justos",
+  "site": "https://www.justos.com.br/",
+  "setor": "Seguros e insurtech",
+  "estagio": "não divulgado",
+  "localizacao": "Barueri, SP",
+  "descricao_curta": "Insurtech brasileira que usa telemetria, dados de sensores e inteligência artificial para avaliar o comportamento de direção e apoiar a precificação de seguros automotivos.",
+  "ano_fundacao": 2020,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Nosso jeito — Justos, seguro auto que recompensa a boa direção",
+      "conteudo_texto": "A página institucional informa que a Justos usa inteligência artificial, tecnologia e design para transformar direção consciente em preços melhores. O site identifica a empresa como plataforma digital de distribuição e representante de seguros, informa o endereço atual em Barueri e lista os processos SUSEP associados aos produtos oferecidos.",
+      "url_fonte": "https://www.justos.com.br/nossojeito",
+      "dominio_fonte": "justos.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "A Justos quer transformar o trânsito beneficiando os bons motoristas",
+      "conteudo_texto": "A reportagem apresenta a Justos como empresa fundada em 2020 por Dhaval Chadha, Jorge Soto Moreno e Antonio Molins. O texto descreve uma tecnologia de telemetria que considera velocidade, frenagem, aceleração, curvas e uso do celular ao avaliar o comportamento de direção e apoiar o cálculo do preço do seguro.",
+      "url_fonte": "https://www.projetodraft.com/seguro-e-uma-dor-de-cabeca-a-justos-quer-transformar-o-transito-beneficiando-os-bons-motoristas-e-facilitando-a-vida-dos-corretores/",
+      "dominio_fonte": "projetodraft.com",
+      "data_publicacao": "2024-11-26",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Startup de seguro auto usa telemetria para mapear a forma de direção dos motoristas",
+      "conteudo_texto": "A matéria descreve a coleta de dados de GPS e dos sensores de movimento do celular para avaliar percursos realizados por motoristas. Segundo o texto, os dados são processados para gerar uma nota de direção e podem permitir à Justos oferecer preços aproximadamente até vinte por cento menores para motoristas considerados conscientes.",
+      "url_fonte": "https://revistacobertura.com.br/noticias/auto-servicos/startup-de-seguro-auto-utiliza-tecnologia-pioneira-para-mapear-a-forma-de-direcao-dos-motoristas/",
+      "dominio_fonte": "revistacobertura.com.br",
+      "data_publicacao": "2023-05-10",
+      "data_acesso": "2026-08-28"
+    }
+  ]
+}

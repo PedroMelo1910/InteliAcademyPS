@@ -1,0 +1,40 @@
+{
+  "nome": "Frete.com",
+  "site": "https://www.frete.com/",
+  "setor": "Logística / transporte",
+  "estagio": "série F",
+  "localizacao": "São Paulo, SP",
+  "descricao_curta": "Plataforma brasileira de transporte rodoviário de cargas que conecta transportadoras, embarcadores e motoristas, com matching inteligente, gestão de risco e serviços financeiros.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Frete.com — Inteligência artificial e tecnologia a serviço do transporte de cargas",
+      "conteudo_texto": "A página institucional apresenta o Frete.com como ecossistema de tecnologia para transporte de cargas na América Latina. Lista matching inteligente de motoristas, negociação automatizada de fretes, gestão de risco com inteligência artificial aceita por seguradoras, crédito para transportadoras e motoristas, conta digital e analytics de mercado para precificação e descoberta de rotas. Informa endereço na Av. Dr. Chucri Zaidan, 1240, em São Paulo.",
+      "url_fonte": "https://www.frete.com/",
+      "dominio_fonte": "frete.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "EXCLUSIVO: CargoX avaliada em US$ 1 bi em rodada com Tencent e Softbank",
+      "conteudo_texto": "A reportagem de outubro de 2021 informa que a CargoX estava na reta final para levantar US$ 200 milhões em uma rodada série F que a avaliaria em US$ 1 bilhão pós-money. Segundo fontes ouvidas pelo veículo, Tencent e Softbank lideravam a operação, com US$ 150 milhões, e os US$ 50 milhões restantes estavam reservados a outros investidores. O texto descreve a CargoX como plataforma que conecta caminhoneiros com capacidade ociosa a empresas que precisam de frete.",
+      "url_fonte": "https://braziljournal.com/cargox-avaliada-em-us-1-bi-em-rodada-com-tencent-e-softbank/",
+      "dominio_fonte": "braziljournal.com",
+      "data_publicacao": "2021-10-15",
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Logística na América Latina: dona da CargoX se torna mais novo unicórnio brasileiro",
+      "conteudo_texto": "A matéria de novembro de 2021 identifica o Frete.com como holding que reúne a CargoX, a FreteBras e a FretePago, e registra aporte de US$ 200 milhões liderado por SoftBank e Tencent, com avaliação superior a US$ 1 bilhão. Informa, como números daquele momento, 80 mil usuários que publicavam cargas mensalmente, representando 615 mil caminhões.",
+      "url_fonte": "https://www.infomoney.com.br/negocios/logistica-na-america-latina-dona-da-cargox-se-torna-mais-novo-unicornio-brasileiro/",
+      "dominio_fonte": "infomoney.com.br",
+      "data_publicacao": "2021-11-10",
+      "data_acesso": "2026-08-27"
+    }
+  ]
+}

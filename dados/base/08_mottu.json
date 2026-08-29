@@ -1,0 +1,40 @@
+{
+  "nome": "Mottu",
+  "site": "https://mottu.com.br/",
+  "setor": "Mobilidade",
+  "estagio": "série C",
+  "localizacao": "São Paulo, SP",
+  "descricao_curta": "Maior empresa de aluguel de motocicletas do Brasil, voltada a entregadores e couriers, oferecendo também crédito, seguro, manutenção e suporte 24 horas aos locatários.",
+  "ano_fundacao": 2020,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Mottu — Aluguel de Motos | A maior do Brasil",
+      "conteudo_texto": "A página inicial da Mottu se apresenta como a maior empresa de aluguel de motocicletas do Brasil, atuando desde 2020 conectando entregadores a motos disponíveis para locação. O conteúdo da página não menciona inteligência artificial, machine learning ou qualquer tecnologia própria de IA como parte do produto ou da proposta de valor apresentada.",
+      "url_fonte": "https://mottu.com.br/",
+      "dominio_fonte": "mottu.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Mottu secures $40M in debt/equity to rent motorcycles to couriers in Latin America",
+      "conteudo_texto": "A reportagem de 30 de junho de 2022 confirma que a Mottu, fundada no início de 2020 em São Paulo pelo CEO Rubens Zanelatto, capta US$40 milhões (US$30 milhões em equity Série B liderados por Base Partners e Crankstart, mais US$10 milhões em dívida da Verde Asset). Descreve o negócio como aluguel de motos a entregadores, com crédito, seguro, manutenção e suporte, sem qualquer menção a inteligência artificial no texto.",
+      "url_fonte": "https://techcrunch.com/2022/06/30/mottu-secures-40m-in-debt-equity-to-rent-motorcycles-to-couriers-in-latin-america/",
+      "dominio_fonte": "techcrunch.com",
+      "data_publicacao": "2022-06-30",
+      "data_acesso": "2026-08-26"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Rodadas da semana: Mottu é primeira startup investida do Bicycle na América Latina",
+      "conteudo_texto": "O artigo de 16 de setembro de 2023 relata uma rodada Série C de US$50 milhões da Mottu, colideradas por QED Investors e Bicycle Capital, com participação de Endeavor Catalyst, Caravela, Michael Moritz, Base Partners e Tiger Global, somando mais de US$150 milhões captados desde 2020. O texto descreve a Mottu como plataforma de aluguel de motos e logística de última milha, sem citar inteligência artificial no produto.",
+      "url_fonte": "https://www.bloomberglinea.com.br/startups/rodadas-da-semana-mottu-e-primeira-startup-investida-do-bicycle-na-america-latina/",
+      "dominio_fonte": "bloomberglinea.com.br",
+      "data_publicacao": "2023-09-16",
+      "data_acesso": "2026-08-26"
+    }
+  ]
+}

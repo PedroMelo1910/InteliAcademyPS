@@ -1,0 +1,40 @@
+{
+  "nome": "Descomplica",
+  "site": "https://descomplica.com.br/",
+  "setor": "Educação",
+  "estagio": "série E",
+  "localizacao": null,
+  "descricao_curta": "Plataforma brasileira de educação digital que oferece preparação para o Enem, cursos de graduação e de pós-graduação, com assistente de estudos por inteligência artificial entre os recursos do produto.",
+  "ano_fundacao": 2011,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Descomplica: Cursinho para Enem, Faculdade e Pós Digital",
+      "conteudo_texto": "A página oficial apresenta a Descomplica como plataforma de educação digital que prepara estudantes para o Enem e vestibulares desde 2011, organizando a oferta em cursinho, cursos livres, graduação e pós-graduação. Os planos são comercializados por assinatura mensal parcelada e incluem, entre os recursos listados, um assistente de estudos com inteligência artificial.",
+      "url_fonte": "https://descomplica.com.br/",
+      "dominio_fonte": "descomplica.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Descomplica capta R$ 450 milhões para investir em faculdade digital",
+      "conteudo_texto": "A reportagem de fevereiro de 2021 registra captação de R$ 450 milhões em rodada série E liderada por SoftBank e Invus Opportunities, com participação de Valor Capital Group, Península Participações e Chan Zuckerberg Initiative. Identifica o fundador Marco Fisbhen, professor de física natural do Rio de Janeiro, e situa em 2010 o começo da produção de vídeos curtos voltados a estudantes de vestibular, anterior ao modelo posterior de assinatura e ensino superior.",
+      "url_fonte": "https://exame.com/pme/descomplica-recebe-aporte-de-r-450-milhoes-para-investir-em-faculdade-digital/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2021-02-18",
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Os próximos passos da startup de educação online Descomplica após comprar universidade no Paraná",
+      "conteudo_texto": "A matéria de junho de 2021 descreve a Descomplica como fundada no final de 2011 e noticia a aquisição da UniAmérica, centro universitário paranaense, que ampliou a oferta de graduação online de 4 para 22 cursos. Registra, como números daquele momento, 2 mil alunos de graduação, 55 mil de pós-graduação e alcance mensal em torno de 5 milhões de estudantes somadas todas as frentes.",
+      "url_fonte": "https://www.infomoney.com.br/negocios/o-proximo-passo-da-startup-de-educacao-online-descomplica-comprar-uma-universidade/",
+      "dominio_fonte": "infomoney.com.br",
+      "data_publicacao": "2021-06-22",
+      "data_acesso": "2026-08-27"
+    }
+  ]
+}

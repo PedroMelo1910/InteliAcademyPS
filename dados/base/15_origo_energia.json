@@ -1,0 +1,40 @@
+{
+  "nome": "Órigo Energia",
+  "site": "https://origoenergia.com.br/",
+  "setor": "Energia e geração solar distribuída",
+  "estagio": "não divulgado",
+  "localizacao": null,
+  "descricao_curta": "Empresa brasileira de geração distribuída que comercializa energia solar por assinatura e busca desenvolver modelos de machine learning e IA para previsão de geração, detecção de perdas e priorização de serviços.",
+  "ano_fundacao": 2010,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Órigo Energia — assinatura de energia solar sem obras",
+      "conteudo_texto": "A Órigo oferece energia solar por assinatura por meio de geração distribuída, sem exigir a instalação de placas ou obras no imóvel do cliente. A página institucional descreve uma rede de fazendas solares e informa que os créditos correspondentes à energia gerada são aplicados diretamente à fatura da distribuidora local.",
+      "url_fonte": "https://origoenergia.com.br/",
+      "dominio_fonte": "origoenergia.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Órigo levanta R$ 500 milhões do Santander para “alugar” energia solar",
+      "conteudo_texto": "A reportagem registra que a Órigo foi criada em 2010 e captou R$ 500 milhões em notas comerciais junto ao Santander para expandir suas fazendas solares. O texto apresenta dados de capacidade instalada, unidades consumidoras e expansão, além de registrar a entrada da I Squared Capital como acionista em 2024.",
+      "url_fonte": "https://neofeed.com.br/negocios/origo-levanta-r-500-milhoes-do-santander-para-alugar-energia-solar/",
+      "dominio_fonte": "neofeed.com.br",
+      "data_publicacao": "2025-05-19",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "vaga",
+      "titulo": "Especialista de Performance",
+      "conteudo_texto": "A vaga da Órigo para Especialista de Performance atribui ao cargo a construção de modelos analíticos com machine learning e inteligência artificial para prever geração, detectar perdas e priorizar manutenção e serviços. Também exige experiência com pipelines de dados em nuvem, Python ou R, SQL e modelagem estatística.",
+      "url_fonte": "https://origoenergia.gupy.io/jobs/12185056?jobBoardSource=gupy_portal",
+      "dominio_fonte": "origoenergia.gupy.io",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    }
+  ]
+}

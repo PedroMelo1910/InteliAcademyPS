@@ -1,0 +1,40 @@
+{
+  "nome": "Wine",
+  "site": "https://www.wine.com.br/",
+  "setor": "Varejo e e-commerce de bebidas",
+  "estagio": "não divulgado",
+  "localizacao": "Serra, ES",
+  "descricao_curta": "Varejista brasileira de vinhos que opera e-commerce, lojas e clube de assinatura com curadoria especializada, usando IA generativa e visão computacional no atendimento e em processos de pós-venda.",
+  "ano_fundacao": 2008,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Clube Wine — clube de assinatura de vinhos",
+      "conteudo_texto": "A página do Clube Wine apresenta diferentes modalidades de assinatura com o envio periódico de rótulos selecionados. A escolha dos vinhos é atribuída aos Winehunters, profissionais que recebem amostras e fazem análises antes da seleção, e o rodapé informa o endereço empresarial atual em Serra, Espírito Santo.",
+      "url_fonte": "https://www.wine.com.br/clubewine/",
+      "dominio_fonte": "wine.com.br",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Quem é a Wine, clube de vinhos que busca um IPO de R$ 1 bilhão",
+      "conteudo_texto": "A reportagem registra que a companhia surgiu em 2008, em Vila Velha, e criou seu clube de assinatura em 2010. O texto apresenta números históricos de associados e clientes e informa que, naquele momento, a empresa buscava uma oferta pública de ações, sem demonstrar que o IPO tenha sido concluído.",
+      "url_fonte": "https://exame.com/negocios/quem-e-a-wine-clube-de-vinhos-que-busca-um-ipo-de-r-1-bi/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2020-08-29",
+      "data_acesso": "2026-08-28"
+    },
+    {
+      "tipo": "blog",
+      "titulo": "IA generativa no atendimento ao cliente: como Wine escalou operação com a Cogni2",
+      "conteudo_texto": "O estudo de caso descreve a aplicação de inteligência artificial generativa ao atendimento da operação de e-commerce da Wine. A solução executa ações como cancelamentos, alterações de endereço e abertura de tickets, enquanto recursos de visão computacional auxiliam a análise de imagens relacionadas a avarias em pedidos.",
+      "url_fonte": "https://www.distrito.me/blog/ia-generativa-atendimento-ao-cliente-como-wine-escalou-operacao-cogni2",
+      "dominio_fonte": "distrito.me",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-28"
+    }
+  ]
+}

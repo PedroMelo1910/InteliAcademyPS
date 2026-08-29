@@ -1,0 +1,40 @@
+{
+  "nome": "Pix Force",
+  "site": "https://pixforce.com/",
+  "setor": "Visão computacional para operações industriais",
+  "estagio": "não divulgado",
+  "localizacao": "Porto Alegre, RS",
+  "descricao_curta": "Empresa brasileira que aplica inteligência artificial e visão computacional a segurança industrial, inspeção visual, controle de qualidade e processamento de documentos.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "IA para salvar vidas, proteger ativos e ganhar eficiência",
+      "conteudo_texto": "A página oficial em português descreve a aplicação de inteligência artificial em operações industriais críticas para aumentar a segurança operacional e automatizar processos. Apresenta o Pix Safety, que usa câmeras de segurança já instaladas para inspecionar desvios de uso de EPI e gerar alertas em tempo real, e o Idexa, de leitura inteligente de documentos por OCR, além de painéis analíticos voltados a equipes de segurança do trabalho.",
+      "url_fonte": "https://pixforce.com/pt-br",
+      "dominio_fonte": "pixforce.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Essa startup já usa inteligência artificial há 7 anos. E vai faturar R$ 12 milhões com ela",
+      "conteudo_texto": "A reportagem de outubro de 2023 situa a Pix Force em Porto Alegre, cita os sócios-fundadores Renato Gomes e Daniel Moura e afirma que a empresa nasceu em 2015. Descreve o negócio como análise e interpretação de fotos e vídeos para facilitar o trabalho em fábricas e plantas industriais, menciona os produtos Pix Safety e Pix Docs, contagem de itens e inspeção de qualidade, e registra faturamento de R$ 8 milhões em 2022 com projeção de R$ 12 milhões em 2023.",
+      "url_fonte": "https://exame.com/negocios/essa-startup-ja-usa-inteligenica-artificial-ha-7-anos-e-vai-faturar-r-12-milhoes-com-ela/amp/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2023-10-21",
+      "data_acesso": "2026-08-27"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Pix Force: startup de Porto Alegre desenvolve soluções de visão computacional e prevê faturar US$ 2,9 milhões",
+      "conteudo_texto": "A matéria de outubro de 2023 descreve a Pix Force como fundada em 2016 em Porto Alegre pelos sócios Daniel Moura e Renato Gomes, com atuação em visão computacional. Lista soluções de leitura de documentos, segurança do trabalho, controle de qualidade em linhas de produção, monitoramento de redes elétricas, inspeção em mineração e contagem automatizada, além de planos, à época, de expansão para os Estados Unidos e países da América Latina.",
+      "url_fonte": "https://startupi.com.br/pix-force-startup-preve-faturar-us-29-milhoes/",
+      "dominio_fonte": "startupi.com.br",
+      "data_publicacao": "2023-10-13",
+      "data_acesso": "2026-08-27"
+    }
+  ]
+}
