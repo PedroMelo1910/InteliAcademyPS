@@ -43,6 +43,9 @@ CATEGORIAS_ESTRUTURAIS: frozenset[str] = frozenset(
 
 PolaridadeAfirmacao = Literal["presenca", "ausencia_explicita", "neutro"]
 
+MINIMO_FRASES_JUSTIFICATIVA = 2
+MAXIMO_FRASES_JUSTIFICATIVA = 4
+
 LIMITE_TRECHO_CITADO = 300
 MINIMO_CARACTERES_TRECHO_CITADO = 12
 MINIMO_PALAVRAS_TRECHO_CITADO = 3
@@ -256,6 +259,47 @@ class PerfilExtraido(BaseModel):
         return self
 
 
+class Classificacao(BaseModel):
+    """Saída do Classifier: a classe, o porquê e as afirmações que o sustentam.
+
+    O contrato garante a forma; a existência dos ids de suporte dentro do
+    perfil analisado é verificada na fronteira do nó, que é quem conhece o
+    ``PerfilExtraido`` correspondente.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    classe: ClasseStartup
+    justificativa: str = Field(min_length=1)
+    ids_afirmacoes_suporte: list[int] = Field(min_length=1)
+
+    @field_validator("justificativa")
+    @classmethod
+    def justificativa_tem_de_duas_a_quatro_frases(cls, valor: str) -> str:
+        if not valor.strip():
+            raise ValueError("justificativa não pode conter apenas espaços")
+        if not (
+            MINIMO_FRASES_JUSTIFICATIVA
+            <= contar_frases(valor)
+            <= MAXIMO_FRASES_JUSTIFICATIVA
+        ):
+            raise ValueError(
+                "justificativa deve ter de "
+                f"{MINIMO_FRASES_JUSTIFICATIVA} a {MAXIMO_FRASES_JUSTIFICATIVA} "
+                "frases terminadas em pontuação"
+            )
+        return valor
+
+    @field_validator("ids_afirmacoes_suporte")
+    @classmethod
+    def suporte_sem_repeticao_e_com_ids_validos(cls, valores: list[int]) -> list[int]:
+        if any(valor < 1 for valor in valores):
+            raise ValueError("id_afirmacao começa em 1")
+        if len(set(valores)) != len(valores):
+            raise ValueError("ids_afirmacoes_suporte não pode repetir ids duplicados")
+        return valores
+
+
 class DocumentoCurado(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -406,5 +450,6 @@ class EstadoRadar(TypedDict, total=False):
     resultado_recuperacao: ResultadoRecuperacao
     perfil_extraido: PerfilExtraido
     tentativas_extracao: int
+    classificacao: Classificacao
     erros: Annotated[list[str], operator.add]
     trajeto: Annotated[list[str], operator.add]

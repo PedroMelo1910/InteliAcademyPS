@@ -25,6 +25,8 @@ from radar.contratos import (
 )
 from radar.grafo import montar_grafo
 from radar.provedores import (
+    ProvedorClassificacao,
+    ProvedorGeminiClassificacao,
     ProvedorGeminiPerfilExtraido,
     ProvedorGeminiPlanoConsulta,
     ProvedorPerfilExtraido,
@@ -122,14 +124,18 @@ def criar_aplicacao(
     caminho_banco=CAMINHO_BANCO,
     caminho_checkpoints=CAMINHO_CHECKPOINTS,
     provedor_extracao: ProvedorPerfilExtraido | None = None,
+    provedor_classificacao: ProvedorClassificacao | None = None,
 ) -> AplicacaoRadar:
     inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
-    if (provedor is None) != (provedor_extracao is None):
+    injetados = (provedor, provedor_extracao, provedor_classificacao)
+    if any(item is not None for item in injetados) and any(
+        item is None for item in injetados
+    ):
         raise ErroConfiguracao(
-            "Para injeção offline, informe juntos os provedores do Query Planner "
-            "e do Extractor."
+            "Para injeção offline, informe juntos os provedores do Query Planner, "
+            "do Extractor e do Classifier."
         )
-    if provedor is None and provedor_extracao is None:
+    if all(item is None for item in injetados):
         load_dotenv(RAIZ_PROJETO / ".env")
         api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         if not api_key:
@@ -139,11 +145,17 @@ def criar_aplicacao(
             )
         provedor = ProvedorGeminiPlanoConsulta(api_key)
         provedor_extracao = ProvedorGeminiPerfilExtraido(api_key)
-    assert provedor is not None and provedor_extracao is not None
+        provedor_classificacao = ProvedorGeminiClassificacao(api_key)
+    assert (
+        provedor is not None
+        and provedor_extracao is not None
+        and provedor_classificacao is not None
+    )
     grafo, conexao = montar_grafo(
         BaseStartups(caminho_banco),
         provedor,
         provedor_extracao,
+        provedor_classificacao,
         caminho_checkpoints,
     )
     return AplicacaoRadar(grafo, conexao)
