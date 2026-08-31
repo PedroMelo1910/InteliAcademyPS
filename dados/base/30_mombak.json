@@ -1,0 +1,40 @@
+{
+  "nome": "Mombak",
+  "site": "https://mombak.com/",
+  "setor": "Remoção de carbono e restauração florestal",
+  "estagio": "não divulgado",
+  "localizacao": null,
+  "descricao_curta": "Reflorestamento nativo e biodiverso na Amazônia, verticalmente integrado da terra à venda de créditos de remoção de carbono para empresas.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "How — Mombak",
+      "conteudo_texto": "Página oficial que descreve o método da empresa como combinação de ciência, tecnologia, silvicultura e engajamento comunitário. Declara execução de projetos de reflorestamento nativo e biodiverso em larga escala, começando pela Amazônia, cujas florestas removem e armazenam carbono atmosférico enquanto criam habitat para fauna e flora, e que são convertidas em reservas naturais para manter o carbono fora da atmosfera pelo maior tempo possível. Lista como diferenciais que a remoção de carbono é seu único negócio, o aproveitamento da regeneração natural, a integração vertical completa com controle direto de cada etapa da cadeia, da terra até a venda do crédito de carbono, a preservação de longo prazo em que a área não pode mais ser legalmente desmatada, a restauração da biodiversidade nativa e o apoio a comunidades vizinhas, incluindo assistência a produtores para intensificar a produtividade.",
+      "url_fonte": "https://mombak.com/how/",
+      "dominio_fonte": "mombak.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Mombak Entrega Créditos de Carbono a Compradores Dois Anos Antes do Prazo",
+      "conteudo_texto": "Reportagem assinada pela Reuters e publicada pela Forbes Brasil. Informa que a empresa afirmou ter entregue seus primeiros créditos de remoção de carbono mais de dois anos antes do previsto, marco que, segundo a matéria, pode aumentar a confiança em um mercado afetado por preocupações com a qualidade dos projetos e com atrasos de entrega. Os créditos foram destinados a compradores como Google, McKinsey e McLaren Racing, que esperavam recebê-los apenas em 2028, além de Bain & Company, Climeworks, Commons e Union Square Ventures. A primeira emissão corresponde a mais de 21 mil toneladas de dióxido de carbono removidas da atmosfera, número atribuído pela reportagem à própria empresa. A startup já plantou quase 15 milhões de árvores em 12 fazendas na Amazônia, e os créditos derivam do carbono capturado pelas florestas, vendidos a empresas interessadas em compensar emissões. O diretor comercial Dan Harburg é citado sobre entregas abaixo do prometido no mercado, e a empresa projeta nova emissão de 55 mil créditos no ano.",
+      "url_fonte": "https://forbes.com.br/forbes-agro/2026/08/mombak-entrega-creditos-de-carbono-a-compradores-dois-anos-antes-do-prazo/",
+      "dominio_fonte": "forbes.com.br",
+      "data_publicacao": "2026-08-04",
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Com US$ 250 milhões para reflorestar, Mombak abre novo fundo e entra em fase de \"hipercrescimento\"",
+      "conteudo_texto": "Perfil baseado em entrevista. Relata que a Mombak foi criada por Peter Fernández, ex-CEO da 99, e Gabriel Haddad Silva, ex-CFO do Nubank, dedicada à geração de créditos de remoção de carbono a partir de projetos de restauração florestal. Após um período de testes e validação do modelo de negócios, a empresa atraiu mais de US$ 250 milhões em aportes de instituições como o Banco Mundial e o BNDES, e prepara um novo fundo descrito como captação em estruturação, e não como capital já concluído. A operação é detalhada: plantio de espécies nativas como itaúba, mogno, acapu e castanha-do-pará em 12 fazendas no Pará, totalizando 20 mil hectares sob gestão, com plantios iniciados em 2023. A metodologia conecta dados de campo coletados com drones a dados tridimensionais e imagens de satélite, para medir quanto carbono já foi capturado pela floresta. No modelo fundiário, a empresa compra terras para implantar os projetos e, em paralelo, desenvolve parcerias com produtores rurais que entram com a terra e participam da receita dos créditos. Entre as metas declaradas está remover 1 milhão de toneladas de CO2 por ano a partir de 2035.",
+      "url_fonte": "https://agfeed.com.br/esg/com-us-250-milhoes-para-reflorestar-mombak-abre-novo-fundo-e-entra-em-fase-de-hipercrescimento/",
+      "dominio_fonte": "agfeed.com.br",
+      "data_publicacao": "2026-02-05",
+      "data_acesso": "2026-08-31"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "nome": "Lume Robotics",
+  "site": "https://lumerobotics.ai/",
+  "setor": "Mobilidade autônoma e robótica para operações industriais",
+  "estagio": "não divulgado",
+  "localizacao": "Vitória, ES",
+  "descricao_curta": "Sistema embarcado de automação veicular nível 4 para operar caminhões, ônibus e utilitários sem motorista em portos, minas e plantas industriais.",
+  "ano_fundacao": 2019,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Lume Robotics — Sistema Lume de Mobilidade Autônoma",
+      "conteudo_texto": "A página apresenta o Sistema Lume como uma solução composta por hardware e software que permite a veículos trafegar sem motorista. Descreve localização e mapeamento com LiDAR, radar, IMU, GPS e odometria; percepção do ambiente em 360 graus; planejamento de rotas e movimentos; tomada de decisão; controle do veículo e uma central remota de operações. A empresa declara fundação em 2019 a partir do Projeto IARA do LCAD/UFES e experiência em deep learning, inteligência artificial, visão computacional e robótica autônoma. Também apresenta aplicações de nível 4 em ambientes industriais, mineração e transporte de pessoas e materiais, além do endereço em Vitória, Espírito Santo.",
+      "url_fonte": "https://lumerobotics.ai/",
+      "dominio_fonte": "lumerobotics.ai",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Lume Robotics quer levantar R$ 15 milhões para levar veículos autônomos a portos, minas e indústrias do país e exterior",
+      "conteudo_texto": "A reportagem informa que a Lume Robotics foi fundada em 2019 por especialistas do Projeto IARA da UFES e desenvolveu o Sistema Lume de Mobilidade Autônoma, que integra radar, GPS e visão computacional para operar sem motorista em ambientes mapeados. Relaciona entregas anteriores: o primeiro taxiamento autônomo de uma aeronave comercial, em parceria com UFES e Embraer; um utilitário elétrico autônomo para a Petrobras; um ônibus autônomo de 21 passageiros para a Marcopolo; e caminhões sem intervenção humana para Ypê, Portocel e ArcelorMittal. Registra atuação em Espírito Santo, Goiás, Maranhão, Pará e São Paulo, e cita Rânik Guidolini como diretor executivo, com metas de expansão para Estados Unidos, México, Uruguai e Peru. Os R$ 15 milhões aparecem como rodada aberta e conversas em andamento com fundos, destinados a um centro de pesquisa, desenvolvimento e inovação e à consolidação do modelo escalável, ou seja, intenção de captação e não rodada concluída.",
+      "url_fonte": "https://www.folhavitoria.com.br/economia/lume-robotics-quer-levantar-r-15-milhoes-para-levar-veiculos-autonomos-a-portos-minas-e-industrias-do-pais-e-exterior/",
+      "dominio_fonte": "folhavitoria.com.br",
+      "data_publicacao": "2025-05-26",
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "release",
+      "titulo": "Lume Robotics desenvolve o primeiro micro-ônibus autônomo da América Latina",
+      "conteudo_texto": "Comunicação institucional da Fundepar, investidora da empresa, sobre o desenvolvimento de um micro-ônibus autônomo de 21 passageiros com nível quatro de automação e do primeiro sistema de automação de caminhão nível quatro no Brasil. O texto declara que a Lume Robotics trabalha com redes neurais profundas de deep learning, inteligência artificial, visão computacional e robótica autônoma. Registra a origem acadêmica da empresa, fundada em 2019 por pesquisadores do Projeto IARA, sigla de Intelligent Autonomous Robotic Automobile, do Laboratório de Computação de Alto Desempenho da UFES, iniciado em 2009, e informa aporte da Fundepar em 2020. Cita Rânik Guidolini como diretor executivo. Os marcos e superlativos descritos referem-se a agosto de 2023, data da publicação, e não a números atuais.",
+      "url_fonte": "https://fundepar.com.br/lume-robotics-desenvolve-o-primeiro-micro-onibus-autonomo-da-america-latina/",
+      "dominio_fonte": "fundepar.com.br",
+      "data_publicacao": "2023-08-24",
+      "data_acesso": "2026-08-31"
+    }
+  ]
+}

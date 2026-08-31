@@ -1,0 +1,40 @@
+{
+  "nome": "Letrus",
+  "site": "https://www.letrus.com/",
+  "setor": "Educação — avaliação automatizada de escrita e letramento",
+  "estagio": "não divulgado",
+  "localizacao": "São Paulo, SP",
+  "descricao_curta": "Programa curricular de leitura e escrita no qual a inteligência artificial gera devolutivas e notas por competência, acompanhado de conteúdos, relatórios e apoio pedagógico para escolas e redes públicas.",
+  "ano_fundacao": 2017,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Letrus — Tecnologia Educacional",
+      "conteudo_texto": "A página institucional define a Letrus como programa curricular que une inteligência artificial e pedagogia para desenvolver leitura e escrita nos anos finais do ensino fundamental e no ensino médio. Para o aluno, descreve devolutivas imediatas geradas por inteligência artificial, comentários e notas atribuídos por competência, critérios de avaliação transversais aos gêneros textuais e zeramento automático da redação em casos de plágio, texto insuficiente, fuga ao tema e fuga ao gênero. Para o professor, apresenta relatórios de desempenho da turma, acompanhamento em tempo real, conteúdo alinhado à BNCC e autonomia para complementar as devolutivas e notas geradas pela inteligência artificial. Para o gestor, oferece assessoria pedagógica e painéis de monitoramento da rede. A empresa declara presença como política pública nas redes estaduais de Mato Grosso, Goiás e Espírito Santo. Os números de mais de um milhão de alunos beneficiados, mais de quatro milhões de textos escritos, mais de 5,9 mil escolas públicas e privadas, 81 por cento de satisfação dos professores e o reconhecimento pela UNESCO são declarações institucionais da própria empresa, sem data na página.",
+      "url_fonte": "https://www.letrus.com/",
+      "dominio_fonte": "letrus.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Startup que fomenta a leitura e escrita recebe R$ 36 milhões e quer criar a própria IA generativa",
+      "conteudo_texto": "A reportagem registra captação concluída de R$ 36 milhões liderada pela Crescera Capital, com participação de Owl Ventures, Altitude, BID Lab, Fundação Lemann, VélezReyes+ e investidores-anjo. Informa operação desde 2017 e sede em São Paulo, citando Thiago Rached à frente da empresa e Luis Junqueira, professor de português, entre os fundadores, ao lado de Alessandro Arpetti e Renata Grando. Descreve que a empresa já operava com tecnologia de inteligência artificial própria e pretendia sofisticar o sistema avançando para inteligência artificial generativa, buscando uma interação mais fluida e bidirecional com o estudante. Os números de 630 colégios atendidos e de 80 por cento do faturamento vindo de escolas privadas são dados históricos de dezembro de 2023, data da publicação, e não descrevem a operação atual.",
+      "url_fonte": "https://exame.com/negocios/startup-que-fomenta-a-leitura-e-escrita-recebe-r-36-milhoes-e-quer-criar-a-propria-ia-generativa/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2023-12-07",
+      "data_acesso": "2026-08-31"
+    },
+    {
+      "tipo": "vaga",
+      "titulo": "Letrus — Nossas Vagas",
+      "conteudo_texto": "Página de carreiras mantida pela própria Letrus e ligada diretamente pelo site institucional. Descreve a empresa como voltada a fortalecer a leitura e a escrita de estudantes do ensino fundamental II e do ensino médio, combinando inteligência artificial e ciência da linguagem no apoio a professores de redes públicas, e menciona validação pela UNESCO e pelo laboratório J-PAL do MIT. Entre as vagas abertas está a de Engenheiro de IA Sênior, em regime CLT e remoto, cujas responsabilidades incluem evoluir os stacks de MLOps e AgentOps, colocar modelos estatísticos e agentes de inteligência artificial em produção, traduzir necessidades pedagógicas em serviços de agentes, garantir escalabilidade, confiabilidade e observabilidade dos modelos, integrar APIs aos serviços centrais da plataforma e definir padrões de versionamento e governança de modelos, com Kubeflow, MLflow, Docker, Kubernetes, Python, FastAPI, LangGraph, CI/CD e nuvens públicas. A página lista também uma vaga de Dev Fullstack Sênior com React, TypeScript, Python, Django, FastAPI, APIs e microsserviços.",
+      "url_fonte": "https://sites.google.com/letrus.com.br/nossasvagas/p%C3%A1gina-inicial",
+      "dominio_fonte": "sites.google.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-31"
+    }
+  ]
+}
