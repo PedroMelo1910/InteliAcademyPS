@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import operator
 import re
 from datetime import date
@@ -19,6 +20,8 @@ TipoDocumento = Literal[
     "release",
 ]
 ResultadoR1 = Literal["analisar", "candidatas_prontas", "relaxar", "sem_resultado"]
+ResultadoR2 = Literal["reextrair", "evidencia_pronta"]
+ResultadoR3 = Literal["evidencia_insuficiente", "nao_aderente", "prosseguir"]
 
 CategoriaAfirmacao = Literal[
     "dados_proprietarios",
@@ -37,11 +40,27 @@ CATEGORIAS_AFIRMACAO: tuple[str, ...] = get_args(CategoriaAfirmacao)
 
 # Só as quatro dimensões estruturais distinguem capacidade observada de gap
 # declarado; nas demais categorias a polaridade não carrega informação.
-CATEGORIAS_ESTRUTURAIS: frozenset[str] = frozenset(
-    {"dados_proprietarios", "workflow_profundo", "distribuicao", "otimizacao_tecnica"}
-)
+DimensaoGap = Literal[
+    "dados_proprietarios",
+    "workflow_profundo",
+    "distribuicao",
+    "otimizacao_tecnica",
+]
+
+# A ordem desta tupla é o contrato: todo relatório de gap percorre as quatro
+# dimensões sempre na mesma sequência, para que duas execuções iguais produzam
+# saídas comparáveis campo a campo.
+DIMENSOES_GAP: tuple[str, ...] = get_args(DimensaoGap)
+
+CATEGORIAS_ESTRUTURAIS: frozenset[str] = frozenset(DIMENSOES_GAP)
 
 PolaridadeAfirmacao = Literal["presenca", "ausencia_explicita", "neutro"]
+
+SituacaoAfirmacao = Literal["confirmada", "derrubada"]
+EstadoGap = Literal["capacidade_confirmada", "gap_confirmado", "desconhecido"]
+ConfiancaPerfil = Literal["normal", "baixa"]
+
+MAXIMO_CARACTERES_MOTIVO = 200
 
 MINIMO_FRASES_JUSTIFICATIVA = 2
 MAXIMO_FRASES_JUSTIFICATIVA = 4
@@ -52,8 +71,15 @@ MINIMO_PALAVRAS_TRECHO_CITADO = 3
 
 
 def normalizar_dominio(valor: str) -> str:
+    """Ponto fixo por construção: normalizar duas vezes dá o mesmo resultado.
+
+    Um prefixo ``www.`` repetido não pode sobreviver a uma passagem, senão o
+    contrato que exige host normalizado rejeita o próprio valor normalizado.
+    """
     dominio = valor.strip().lower()
-    return dominio[4:] if dominio.startswith("www.") else dominio
+    while dominio.startswith("www."):
+        dominio = dominio[4:]
+    return dominio
 
 
 def normalizar_texto_citavel(valor: str) -> str:
@@ -178,6 +204,24 @@ class DocumentoIntegral(BaseModel):
     conteudo_texto: str
 
 
+class DocumentoVerificavel(BaseModel):
+    """Projeção mínima usada para conferir proveniência: texto e domínio.
+
+    É deliberadamente mais estreita que ``DocumentoIntegral``: o Evidence
+    Validator precisa do domínio para contar hosts, mas não precisa de título
+    nem de tipo — e jamais de ``classe_referencia``, que continua invisível
+    para todo o núcleo. Como ``DocumentoIntegral``, nunca entra no
+    ``EstadoRadar``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_documento: int
+    id_startup: int
+    conteudo_texto: str
+    dominio_fonte: str
+
+
 class Afirmacao(BaseModel):
     """A unidade de evidência do sistema: um fato com proveniência literal."""
 
@@ -298,6 +342,161 @@ class Classificacao(BaseModel):
         if len(set(valores)) != len(valores):
             raise ValueError("ids_afirmacoes_suporte não pode repetir ids duplicados")
         return valores
+
+
+class AfirmacaoValidada(Afirmacao):
+    """A afirmação original acrescida do veredito de proveniência.
+
+    Herdar de ``Afirmacao`` preserva todos os campos e todas as regras da
+    unidade de evidência; a validação de evidência acrescenta o veredito sem
+    ter permissão para reescrever o fato citado.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    situacao: SituacaoAfirmacao
+    motivo: str | None = Field(default=None, max_length=MAXIMO_CARACTERES_MOTIVO)
+
+    @model_validator(mode="after")
+    def motivo_corresponde_a_situacao(self) -> AfirmacaoValidada:
+        if self.situacao == "confirmada" and self.motivo is not None:
+            raise ValueError(
+                "afirmação confirmada não carrega motivo; motivo deve ser nulo"
+            )
+        if self.situacao == "derrubada" and not (self.motivo or "").strip():
+            raise ValueError(
+                "afirmação derrubada exige um motivo conciso e não vazio"
+            )
+        return self
+
+
+class EstadoDimensaoGap(BaseModel):
+    """O que a evidência confirmada permite dizer sobre uma dimensão estrutural."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dimensao: DimensaoGap
+    estado: EstadoGap
+    ids_evidencias: list[int] = Field(default_factory=list)
+
+    @field_validator("ids_evidencias")
+    @classmethod
+    def evidencias_sem_repeticao_e_com_ids_validos(cls, valores: list[int]) -> list[int]:
+        if any(valor < 1 for valor in valores):
+            raise ValueError("id_afirmacao começa em 1")
+        if len(set(valores)) != len(valores):
+            raise ValueError("ids_evidencias não pode repetir ids duplicados")
+        if valores != sorted(valores):
+            raise ValueError("ids_evidencias precisa vir em ordem determinística")
+        return valores
+
+    @model_validator(mode="after")
+    def estado_decisivo_exige_evidencia(self) -> EstadoDimensaoGap:
+        if self.estado != "desconhecido" and not self.ids_evidencias:
+            raise ValueError(
+                f"o estado {self.estado} afirma uma conclusão sobre "
+                f"{self.dimensao} e exige ao menos uma evidência que a sustente"
+            )
+        return self
+
+
+class PerfilValidado(BaseModel):
+    """Saída do Evidence Validator: o perfil depois da conferência de proveniência."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    afirmacoes_validadas: list[AfirmacaoValidada] = Field(min_length=1)
+    taxa_derrubada: float = Field(ge=0.0, le=1.0)
+    hosts_distintos: list[str] = Field(default_factory=list)
+    estado_dimensoes_gap: list[EstadoDimensaoGap]
+
+    @field_validator("hosts_distintos")
+    @classmethod
+    def hosts_normalizados_unicos_e_ordenados(cls, valores: list[str]) -> list[str]:
+        for host in valores:
+            if not host.strip():
+                raise ValueError("host não pode ser vazio")
+            if host != normalizar_dominio(host):
+                raise ValueError(
+                    f"host {host!r} precisa vir normalizado em minúsculas e sem 'www.'"
+                )
+        if len(set(valores)) != len(valores):
+            raise ValueError("hosts_distintos não pode repetir hosts")
+        if valores != sorted(valores):
+            raise ValueError("hosts_distintos precisa vir em ordem determinística")
+        return valores
+
+    @model_validator(mode="after")
+    def ids_de_afirmacao_sao_sequenciais(self) -> PerfilValidado:
+        observados = [item.id_afirmacao for item in self.afirmacoes_validadas]
+        if observados != list(range(1, len(observados) + 1)):
+            raise ValueError(
+                "id_afirmacao deve ser sequencial a partir de 1, na ordem da lista"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def taxa_corresponde_as_situacoes(self) -> PerfilValidado:
+        derrubadas = sum(
+            1 for item in self.afirmacoes_validadas if item.situacao == "derrubada"
+        )
+        esperada = derrubadas / len(self.afirmacoes_validadas)
+        if not math.isclose(
+            self.taxa_derrubada, esperada, rel_tol=1e-9, abs_tol=1e-12
+        ):
+            raise ValueError(
+                f"taxa_derrubada declarada {self.taxa_derrubada} não corresponde a "
+                f"{derrubadas} derrubadas em {len(self.afirmacoes_validadas)} "
+                f"afirmações ({esperada})"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def dimensoes_completas_na_ordem_do_contrato(self) -> PerfilValidado:
+        observadas = tuple(item.dimensao for item in self.estado_dimensoes_gap)
+        if observadas != DIMENSOES_GAP:
+            raise ValueError(
+                "estado_dimensoes_gap deve trazer exatamente as quatro dimensões "
+                f"estruturais, uma vez cada, nesta ordem: {list(DIMENSOES_GAP)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def dimensoes_derivam_das_afirmacoes_confirmadas(self) -> PerfilValidado:
+        """Cada dimensão precisa ser exatamente o que a evidência confirmada diz.
+
+        O artefato não pode afirmar capacidade sem afirmação de presença
+        confirmada, nem descartar um dos lados de um conflito, nem citar
+        evidência derrubada, de outra polaridade ou de outra dimensão.
+        """
+        for item in self.estado_dimensoes_gap:
+            presencas = self._ids_confirmados(item.dimensao, "presenca")
+            ausencias = self._ids_confirmados(item.dimensao, "ausencia_explicita")
+            if presencas and ausencias:
+                esperado = ("desconhecido", sorted(presencas + ausencias))
+            elif presencas:
+                esperado = ("capacidade_confirmada", presencas)
+            elif ausencias:
+                esperado = ("gap_confirmado", ausencias)
+            else:
+                esperado = ("desconhecido", [])
+            if (item.estado, item.ids_evidencias) != esperado:
+                raise ValueError(
+                    f"a dimensão {item.dimensao} declara "
+                    f"{item.estado} com evidências {item.ids_evidencias}, mas as "
+                    f"afirmações confirmadas sustentam {esperado[0]} com "
+                    f"{esperado[1]}"
+                )
+        return self
+
+    def _ids_confirmados(self, dimensao: str, polaridade: str) -> list[int]:
+        return sorted(
+            item.id_afirmacao
+            for item in self.afirmacoes_validadas
+            if item.situacao == "confirmada"
+            and item.categoria == dimensao
+            and item.polaridade == polaridade
+        )
 
 
 class DocumentoCurado(BaseModel):
@@ -448,8 +647,13 @@ class EstadoRadar(TypedDict, total=False):
     tentativas_relaxamento: int
     criterios_relaxados: Annotated[list[str], operator.add]
     resultado_recuperacao: ResultadoRecuperacao
-    perfil_extraido: PerfilExtraido
+    # Os quatro campos de análise aceitam ``None`` porque o grafo os invalida
+    # deliberadamente quando a extração ou a recuperação que os originou é
+    # substituída; um artefato órfão é pior que a ausência dele.
+    perfil_extraido: PerfilExtraido | None
     tentativas_extracao: int
-    classificacao: Classificacao
+    classificacao: Classificacao | None
+    perfil_validado: PerfilValidado | None
+    confianca_perfil: ConfiancaPerfil | None
     erros: Annotated[list[str], operator.add]
     trajeto: Annotated[list[str], operator.add]

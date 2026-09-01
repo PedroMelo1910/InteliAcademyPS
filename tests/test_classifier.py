@@ -619,3 +619,16 @@ def test_o_classifier_nao_recebe_base_de_startups():
     provedor = ProvedorSequencial(classificacao())
     classificador = Classifier(provedor)
     assert not hasattr(classificador, "base")
+
+
+def test_classificar_invalida_o_estado_derivado_da_classificacao_anterior():
+    """Reclassificar sem limpar o downstream deixaria um perfil validado órfão."""
+    from radar.agentes.classifier import CAMPOS_DERIVADOS_DA_CLASSIFICACAO
+
+    assert CAMPOS_DERIVADOS_DA_CLASSIFICACAO == (
+        "perfil_validado",
+        "confianca_perfil",
+    )
+    saida = Classifier(ProvedorSequencial(classificacao()))(estado(perfil_ai_native()))
+    assert saida["perfil_validado"] is None
+    assert saida["confianca_perfil"] is None

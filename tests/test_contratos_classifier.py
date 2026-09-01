@@ -91,5 +91,6 @@ def test_estado_radar_declara_a_classificacao():
     assert "classificacao" in EstadoRadar.__annotations__
 
 
-def test_estado_radar_ainda_nao_declara_confianca_perfil():
-    assert "confianca_perfil" not in EstadoRadar.__annotations__
+def test_confianca_perfil_nao_e_produzida_pelo_classifier():
+    """A confiança nasce da conferência de evidências, não da classificação."""
+    assert "confianca_perfil" not in Classificacao.model_fields

@@ -13,6 +13,8 @@ CAMINHO_CHECKPOINTS = RAIZ_PROJETO / "dados" / "checkpoints.db"
 MODELO_GEMINI = "gemini-3.5-flash-lite"
 TETO_DOCUMENTOS_DESCOBERTA = 20
 TETO_RELAXAMENTO = 2
+LIMIAR_DERRUBADA = 0.5
+MAX_EXTRACOES = 2
 
 # Base de conhecimento NVIDIA (Entregável 2).
 CAMINHO_FONTES_NVIDIA = RAIZ_PROJETO / "conhecimento" / "fontes"

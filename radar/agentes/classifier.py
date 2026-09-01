@@ -15,10 +15,14 @@ from radar.contratos import (
 from radar.provedores import ProvedorClassificacao
 
 
-# Campos de estado derivados da classificação. Enquanto o Evidence Validator
-# não existir a tupla está vazia; o nó já invalida o que estiver listado aqui
-# para que uma reexecução do Classifier nunca conviva com um downstream velho.
-CAMPOS_DERIVADOS_DA_CLASSIFICACAO: tuple[str, ...] = ()
+# Campos de estado derivados da classificação. O nó invalida cada um deles a
+# cada execução para que uma reclassificação nunca conviva com um downstream
+# velho: no laço de reextração, um perfil validado antigo descreveria
+# afirmações que já não existem.
+CAMPOS_DERIVADOS_DA_CLASSIFICACAO: tuple[str, ...] = (
+    "perfil_validado",
+    "confianca_perfil",
+)
 
 _PADRAO_NUMERO = re.compile(r"\d+(?:[.,]\d+)?")
 _PADRAO_LISTA_AFIRMACOES = re.compile(
