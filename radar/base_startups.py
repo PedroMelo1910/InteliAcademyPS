@@ -15,9 +15,11 @@ from radar.contratos import (
     DocumentoVerificavel,
     EmpresaCandidata,
     FiltrosEstruturados,
+    MetadadoDocumentoFitScore,
     PlanoConsulta,
     ResultadoRecuperacao,
     StartupCurada,
+    normalizar_dominio,
 )
 
 
@@ -347,6 +349,40 @@ class BaseStartups:
             ).fetchall()
         return {
             linha["id_documento"]: DocumentoVerificavel.model_validate(dict(linha))
+            for linha in linhas
+        }
+
+    def carregar_metadados_fit_score(
+        self, ids_documentos: Sequence[object]
+    ) -> dict[int, MetadadoDocumentoFitScore]:
+        """Metadados de proveniência e datação dos documentos citados, por id.
+
+        O fit-score é uma função pura: ele não abre o SQLite. Esta é a fronteira
+        que entrega, de forma explícita, a URL, o host normalizado e a data de
+        publicação de que a rubrica precisa. Como em
+        ``carregar_documentos_verificaveis``, id ausente some do resultado — a
+        completude é conferida pelo contrato ``EntradaFitScore``, que é quem
+        sabe quais documentos o perfil realmente referencia.
+        """
+        ids = list(dict.fromkeys(ids_documentos))
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT id AS id_documento, url_fonte, dominio_fonte, data_publicacao
+                FROM documentos WHERE id IN ({marcadores})
+                """,
+                tuple(ids),
+            ).fetchall()
+        return {
+            linha["id_documento"]: MetadadoDocumentoFitScore(
+                id_documento=linha["id_documento"],
+                url_fonte=linha["url_fonte"],
+                host_normalizado=normalizar_dominio(linha["dominio_fonte"]),
+                data_publicacao=linha["data_publicacao"],
+            )
             for linha in linhas
         }
 

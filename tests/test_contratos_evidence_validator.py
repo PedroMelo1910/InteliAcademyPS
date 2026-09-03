@@ -291,8 +291,10 @@ def test_estado_radar_declara_a_confianca_do_perfil():
     assert "confianca_perfil" in EstadoRadar.__annotations__
 
 
-def test_estado_radar_nao_declara_contratos_de_marcos_futuros():
-    for campo in ("recomendacao", "fit_score", "briefing"):
+def test_estado_radar_declara_fronteira_do_proximo_marco_sem_briefing():
+    for campo in ("contexto_nvidia", "recomendacoes", "fit_score"):
+        assert campo in EstadoRadar.__annotations__
+    for campo in ("recomendacao", "briefing"):
         assert campo not in EstadoRadar.__annotations__
 
 

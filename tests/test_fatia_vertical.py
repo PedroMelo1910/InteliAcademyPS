@@ -17,6 +17,7 @@ from radar.contratos import (
     PlanoConsulta,
 )
 from radar.grafo import montar_grafo
+from tests.conftest import ConsultorNvidiaFalso
 
 
 class ProvedorFixo:
@@ -99,7 +100,18 @@ def perfil_caju(caminho_banco):
                 "polaridade": "neutro",
                 "id_documento": linha["id_documento"],
                 "trecho_citado": linha["conteudo_texto"][:200],
-            }
+            },
+            # Sem gap sustentado por evidência confirmada o Recommendation falha
+            # com segurança antes de chamar o provedor; esta dor documentada é o
+            # que dá lastro à recomendação do caminho aderente.
+            {
+                "id_afirmacao": 2,
+                "texto": "A fonte relata dependência de uma API externa de IA.",
+                "categoria": "dependencia_api_externa",
+                "polaridade": "neutro",
+                "id_documento": linha["id_documento"],
+                "trecho_citado": linha["conteudo_texto"][50:250],
+            },
         ],
     }
 
@@ -113,6 +125,35 @@ def classificacao_caju():
         ),
         "ids_afirmacoes_suporte": [1],
     }
+
+
+def rascunho_nim(id_afirmacao: int = 2) -> dict:
+    """Endereça a dor documentada citando justamente o id que a sustenta."""
+    return {
+        "gap_enderecado": "dependencia_api_externa",
+        "tecnologias": ["NVIDIA NIM"],
+        "justificativa_tecnica": (
+            "O microserviço hospedado substitui a dependência de API externa."
+        ),
+        "justificativa_negocio": (
+            "O custo por chamada deixa de variar com o fornecedor externo."
+        ),
+        "proxima_acao": {
+            "tipo_acao": "benchmark_custo_latencia",
+            "detalhe": "Medir latência e custo por mil chamadas na carga atual.",
+        },
+        "ids_afirmacoes": [id_afirmacao],
+        "ids_chunks": [101],
+    }
+
+
+def consultor_nvidia_padrao():
+    """O caminho aderente passou a consultar a base NVIDIA; o fake fica offline."""
+    return ConsultorNvidiaFalso()
+
+
+def provedor_recomendacao_padrao(id_afirmacao: int = 2):
+    return ProvedorFixo({"rascunhos": [rascunho_nim(id_afirmacao)]})
 
 
 def provedores(plano, perfil=None, classificacao=None):
@@ -147,7 +188,9 @@ def test_ranking_da_aplicacao_recebe_resultado_real_do_retriever(
     provedor, provedor_extracao, provedor_classificacao = provedores(plano_caju())
     checkpoints = tmp_path / "checkpoints.db"
     aplicacao = criar_aplicacao(
-        provedor, caminho_banco, checkpoints, provedor_extracao, provedor_classificacao
+        provedor, caminho_banco, checkpoints, provedor_extracao, provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
 
     saida = aplicacao.executar_descoberta("fintech brasileira de benefícios com cartão")
@@ -190,6 +233,8 @@ def test_caminho_selecionado_percorre_extractor_classifier_e_validator(
         checkpoints,
         provedor_extracao,
         provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     estado = aplicacao.grafo.invoke(
         estado_selecionado(id_caju),
@@ -214,6 +259,8 @@ def test_caminho_selecionado_percorre_extractor_classifier_e_validator(
         "extractor",
         "classifier",
         "evidence_validator",
+        "nvidia_rag",
+        "recommendation",
     ]
     assert "conteudo_texto" not in json.dumps(
         estado["perfil_extraido"].model_dump(), ensure_ascii=False
@@ -235,6 +282,8 @@ def test_classificacao_sobrevive_ao_checkpoint(tmp_path, caminho_banco):
         tmp_path / "checkpoints_serializacao.db",
         provedor_extracao,
         provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     config = {"configurable": {"thread_id": "serializacao"}}
     aplicacao.grafo.invoke(estado_selecionado(id_caju), config=config)
@@ -249,6 +298,8 @@ def test_classificacao_sobrevive_ao_checkpoint(tmp_path, caminho_banco):
         "extractor",
         "classifier",
         "evidence_validator",
+        "nvidia_rag",
+        "recommendation",
     ]
 
 
@@ -267,6 +318,8 @@ def test_falha_do_classifier_interrompe_o_caminho_sem_fabricar_classificacao(
         tmp_path / "checkpoints_classifier_invalido.db",
         provedor_extracao,
         provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     config = {"configurable": {"thread_id": "classifier-invalido"}}
 
@@ -293,6 +346,8 @@ def test_r2_reexecuta_toda_a_cadeia_em_modo_estrito_e_remove_estado_velho(
         provedor_extracao,
         provedor_classificacao,
         tmp_path / "checkpoints_reextracao.db",
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -341,6 +396,8 @@ def test_r2_reexecuta_toda_a_cadeia_em_modo_estrito_e_remove_estado_velho(
         "extractor",
         "classifier",
         "evidence_validator",
+        "nvidia_rag",
+        "recommendation",
     ]
     segundo_prompt = "\n".join(
         conteudo for _papel, conteudo in provedor_extracao.mensagens[1]
@@ -362,6 +419,8 @@ def test_falha_do_extractor_interrompe_o_caminho_sem_fabricar_perfil(
         tmp_path / "checkpoints_extractor_invalido.db",
         provedor_extracao,
         provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     id_caju = perfil_caju(caminho_banco)["id_startup"]
 
@@ -376,7 +435,7 @@ def test_falha_do_extractor_interrompe_o_caminho_sem_fabricar_perfil(
     assert provedor_classificacao.chamadas == 0
 
 
-def test_injecao_offline_exige_os_tres_provedores(tmp_path, caminho_banco):
+def test_injecao_offline_exige_todos_os_provedores(tmp_path, caminho_banco):
     with pytest.raises(ErroConfiguracao, match="informe juntos"):
         criar_aplicacao(
             ProvedorFixo(plano_caju()),
@@ -405,6 +464,8 @@ def test_grafo_preserva_relaxamento_e_termino_sem_resultado(
         tmp_path / "checkpoints_sem_resultado.db",
         provedor_extracao,
         provedor_classificacao,
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
 
     estado = aplicacao.grafo.invoke(
@@ -501,6 +562,8 @@ def test_evidencia_nao_literal_percorre_r2_ate_o_teto_e_para_em_evidencia_insufi
         provedor_extracao,
         provedor_classificacao,
         tmp_path / "checkpoints_nao_literal.db",
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -561,7 +624,14 @@ def test_conflito_resolvido_por_reextracao_deixa_o_aviso_datado_no_historico(
             "A Caju oferece uma plataforma de benefícios corporativos. "
             "A solução atende empresas e seus colaboradores."
         ),
-        "afirmacoes": [afirmacao_caju(1, "distribuicao", "presenca", texto[:150])],
+        "afirmacoes": [
+            afirmacao_caju(1, "distribuicao", "presenca", texto[:150]),
+            # Capacidade confirmada não é gap; a dor documentada é o que dá
+            # lastro à recomendação depois que o conflito é resolvido.
+            afirmacao_caju(
+                2, "dependencia_api_externa", "neutro", texto[160:310]
+            ),
+        ],
     }
     provedor_plano = ProvedorFixo(plano_caju())
     provedor_extracao = ProvedorEmSequencia(perfil_conflitante, perfil_limpo)
@@ -575,6 +645,8 @@ def test_conflito_resolvido_por_reextracao_deixa_o_aviso_datado_no_historico(
         provedor_extracao,
         provedor_classificacao,
         tmp_path / "checkpoints_conflito.db",
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -585,7 +657,11 @@ def test_conflito_resolvido_por_reextracao_deixa_o_aviso_datado_no_historico(
         conexao.close()
 
     assert saida["tentativas_extracao"] == 2
-    assert len(saida["perfil_validado"].afirmacoes_validadas) == 1
+    # A reextração devolveu o perfil limpo: some a afirmação em conflito e a
+    # de trecho inexistente; sobram a capacidade confirmada e a dor documentada.
+    validadas = saida["perfil_validado"].afirmacoes_validadas
+    assert len(validadas) == 2
+    assert all(item.situacao == "confirmada" for item in validadas)
     dimensao = next(
         item
         for item in saida["perfil_validado"].estado_dimensoes_gap
@@ -611,6 +687,8 @@ def test_nova_descoberta_no_mesmo_thread_nao_herda_a_analise_antiga(
         provedor_extracao,
         provedor_classificacao,
         tmp_path / "checkpoints_reuso.db",
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(),
     )
     config = {"configurable": {"thread_id": "reuso"}}
     try:
@@ -688,6 +766,16 @@ def _perfil_com_conflito(id_startup: int, id_documento: int, texto: str) -> dict
                 "id_documento": id_documento,
                 "trecho_citado": texto[160:310],
             },
+            # O conflito acima vira ``desconhecido`` e não sustenta gap algum;
+            # esta dor documentada é o que permite o caminho aderente concluir.
+            {
+                "id_afirmacao": 3,
+                "texto": "A fonte relata dependência de uma API externa de IA.",
+                "categoria": "dependencia_api_externa",
+                "polaridade": "neutro",
+                "id_documento": id_documento,
+                "trecho_citado": texto[:150],
+            },
         ],
     }
 
@@ -712,6 +800,8 @@ def test_duas_analises_no_mesmo_thread_produzem_avisos_de_conflito_distinguiveis
         provedor_extracao,
         provedor_classificacao,
         tmp_path / "checkpoints_dois_conflitos.db",
+        consultor_nvidia_padrao(),
+        provedor_recomendacao_padrao(3),
     )
     config = {"configurable": {"thread_id": "dois-conflitos"}}
     try:

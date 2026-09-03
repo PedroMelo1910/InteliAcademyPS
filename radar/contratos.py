@@ -4,7 +4,7 @@ import math
 import operator
 import re
 from datetime import date
-from typing import Annotated, Literal, TypedDict, get_args
+from typing import Annotated, Any, Literal, TypedDict, get_args
 from urllib.parse import urlparse
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -59,6 +59,39 @@ PolaridadeAfirmacao = Literal["presenca", "ausencia_explicita", "neutro"]
 SituacaoAfirmacao = Literal["confirmada", "derrubada"]
 EstadoGap = Literal["capacidade_confirmada", "gap_confirmado", "desconhecido"]
 ConfiancaPerfil = Literal["normal", "baixa"]
+
+GapEnderecado = Literal[
+    "dados_proprietarios",
+    "workflow_profundo",
+    "distribuicao",
+    "otimizacao_tecnica",
+    "dependencia_api_externa",
+    "escala_e_dor_operacional",
+]
+
+TipoAcao = Literal[
+    "convite_inception",
+    "call_tecnica_descoberta",
+    "benchmark_custo_latencia",
+    "poc_nim",
+    "workshop_guardrails",
+    "intro_comunidade_evento",
+]
+
+PrioridadeRecomendacao = Literal["alta", "media", "baixa"]
+ComplexidadeRecomendacao = Literal["baixa", "media", "alta"]
+
+PilarFit = Literal[
+    "centralidade_ia",
+    "gap_enderecavel",
+    "momento",
+    "alinhamento_setorial",
+]
+PILARES_FIT: tuple[str, ...] = get_args(PilarFit)
+
+FaixaFit = Literal["baixa", "media", "alta"]
+TravaFit = Literal["gate_evidencia", "teto_corrobacao", "gate_non_ai"]
+TRAVAS_FIT: tuple[str, ...] = get_args(TravaFit)
 
 MAXIMO_CARACTERES_MOTIVO = 200
 
@@ -640,6 +673,332 @@ class ContextoNvidia(BaseModel):
     trechos: list[TrechoNvidia] = Field(min_length=5, max_length=8)
 
 
+class ProximaAcao(BaseModel):
+    """Ação operacional escolhida pelo LLM dentro de um catálogo fechado."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tipo_acao: TipoAcao
+    detalhe: str = Field(min_length=1)
+
+    @field_validator("detalhe")
+    @classmethod
+    def detalhe_nao_pode_ser_branco(cls, valor: str) -> str:
+        if not valor.strip():
+            raise ValueError("detalhe não pode conter apenas espaços")
+        if contar_frases(valor) != 1:
+            raise ValueError("detalhe precisa ter exatamente uma frase")
+        return valor
+
+
+class RecomendacaoRascunho(BaseModel):
+    """Único schema que o LLM de Recommendation tem permissão para preencher."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gap_enderecado: GapEnderecado
+    tecnologias: list[TecnologiaNvidia] = Field(min_length=1, max_length=3)
+    justificativa_tecnica: str = Field(min_length=1)
+    justificativa_negocio: str = Field(min_length=1)
+    proxima_acao: ProximaAcao
+    ids_afirmacoes: list[int] = Field(min_length=1)
+    ids_chunks: list[int] = Field(min_length=1)
+
+    @field_validator("justificativa_tecnica", "justificativa_negocio")
+    @classmethod
+    def justificativa_nao_pode_ser_branca(cls, valor: str) -> str:
+        if not valor.strip():
+            raise ValueError("justificativa não pode conter apenas espaços")
+        return valor
+
+    @field_validator("tecnologias", "ids_afirmacoes", "ids_chunks")
+    @classmethod
+    def listas_do_rascunho_nao_repetem_itens(cls, valores: list) -> list:
+        if len(set(valores)) != len(valores):
+            raise ValueError("o rascunho não pode repetir itens")
+        if valores and isinstance(valores[0], int) and any(valor < 1 for valor in valores):
+            raise ValueError("ids começam em 1")
+        return valores
+
+
+class EvidenciaStartup(BaseModel):
+    """Afirmação confirmada resolvida para a fonte pública correspondente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_afirmacao: int = Field(ge=1)
+    id_documento: int = Field(ge=1)
+    url_fonte: AnyHttpUrl
+    trecho_citado: str = Field(min_length=1, max_length=LIMITE_TRECHO_CITADO)
+
+    @field_validator("trecho_citado")
+    @classmethod
+    def evidencia_nao_pode_ser_branca(cls, valor: str) -> str:
+        if not valor.strip():
+            raise ValueError("trecho_citado não pode conter apenas espaços")
+        return valor
+
+
+class CitacaoNvidia(ItemCorpusNvidia):
+    """Chunk NVIDIA resolvido, com os metadados necessários para auditoria."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_chunk: int = Field(ge=1)
+    fonte_url: AnyHttpUrl
+    breadcrumb: str = Field(min_length=1)
+
+
+class Recomendacao(BaseModel):
+    """Pacote por gap com proveniência obrigatória nos dois lados."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gap_enderecado: GapEnderecado
+    tecnologias: list[TecnologiaNvidia] = Field(min_length=1, max_length=3)
+    justificativa_tecnica: str = Field(min_length=1)
+    justificativa_negocio: str = Field(min_length=1)
+    prioridade: PrioridadeRecomendacao
+    complexidade: ComplexidadeRecomendacao
+    proxima_acao: ProximaAcao
+    evidencias_startup: list[EvidenciaStartup] = Field(min_length=1)
+    citacoes_nvidia: list[CitacaoNvidia] = Field(min_length=1)
+
+    @field_validator("justificativa_tecnica", "justificativa_negocio")
+    @classmethod
+    def justificativa_final_nao_pode_ser_branca(cls, valor: str) -> str:
+        if not valor.strip():
+            raise ValueError("justificativa não pode conter apenas espaços")
+        return valor
+
+    @field_validator("tecnologias")
+    @classmethod
+    def tecnologias_sem_repeticao(cls, valores: list[str]) -> list[str]:
+        if len(set(valores)) != len(valores):
+            raise ValueError("tecnologias não pode repetir itens")
+        return valores
+
+    @model_validator(mode="after")
+    def proveniencia_e_unica_e_inclui_tecnologia(self) -> Recomendacao:
+        ids_afirmacoes = [item.id_afirmacao for item in self.evidencias_startup]
+        if len(set(ids_afirmacoes)) != len(ids_afirmacoes):
+            raise ValueError("evidencias_startup não pode repetir id_afirmacao")
+
+        ids_chunks = [item.id_chunk for item in self.citacoes_nvidia]
+        if len(set(ids_chunks)) != len(ids_chunks):
+            raise ValueError("citacoes_nvidia não pode repetir id_chunk")
+
+        if not any(
+            item.origem == "tecnologia" and item.tecnologia is not None
+            for item in self.citacoes_nvidia
+        ):
+            raise ValueError(
+                "ao menos uma citação NVIDIA precisa vir de um chunk de tecnologia"
+            )
+        return self
+
+
+class RelatorioRecomendacoes(BaseModel):
+    """Saída validada do nó; variantes terminais podem manter a lista vazia."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recomendacoes: list[Recomendacao] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def cada_gap_entra_uma_unica_vez(self) -> RelatorioRecomendacoes:
+        """Defesa em profundidade da §6.1: um pacote coeso **por gap**.
+
+        O nó já descarta a duplicata antes do retry; esta guarda garante que
+        nenhum outro caminho de construção monte um relatório com o mesmo gap
+        duas vezes. Duplicata é descartada, nunca fundida: dois pacotes para o
+        mesmo gap são duas respostas concorrentes, e escolher uma é decisão do
+        nó, não do contrato.
+        """
+        gaps = [item.gap_enderecado for item in self.recomendacoes]
+        repetidos = sorted({gap for gap in gaps if gaps.count(gap) > 1})
+        if repetidos:
+            raise ValueError(
+                "o relatório não pode trazer mais de uma recomendação para o "
+                f"mesmo gap; repetidos: {repetidos}"
+            )
+        return self
+
+
+class MetadadoDocumentoFitScore(BaseModel):
+    """Metadado explícito que mantém a função de score longe do SQLite."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_documento: int = Field(ge=1)
+    url_fonte: AnyHttpUrl
+    host_normalizado: str = Field(min_length=1)
+    data_publicacao: date | None = None
+
+    @field_validator("host_normalizado")
+    @classmethod
+    def host_precisa_estar_normalizado(cls, valor: str) -> str:
+        if valor != normalizar_dominio(valor):
+            raise ValueError("host_normalizado deve estar em minúsculas e sem 'www.'")
+        return valor
+
+    @model_validator(mode="after")
+    def host_corresponde_a_url(self) -> MetadadoDocumentoFitScore:
+        host_url = normalizar_dominio(urlparse(str(self.url_fonte)).hostname or "")
+        if self.host_normalizado != host_url:
+            raise ValueError("host_normalizado precisa corresponder a url_fonte")
+        return self
+
+
+class EntradaFitScore(BaseModel):
+    """Todos os dados necessários para pontuar, inclusive a data de referência."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    classe: ClasseStartup
+    ids_afirmacoes_suporte_classe: list[int] = Field(min_length=1)
+    perfil_validado: PerfilValidado
+    setor: str = Field(min_length=1)
+    estagio: str = Field(min_length=1)
+    documentos: list[MetadadoDocumentoFitScore] = Field(min_length=1)
+    data_referencia: date
+
+    @field_validator("ids_afirmacoes_suporte_classe")
+    @classmethod
+    def suporte_da_classe_e_unico_e_ordenado(cls, valores: list[int]) -> list[int]:
+        if any(valor < 1 for valor in valores):
+            raise ValueError("id_afirmacao começa em 1")
+        if len(set(valores)) != len(valores):
+            raise ValueError("ids de suporte da classe não podem se repetir")
+        if valores != sorted(valores):
+            raise ValueError("ids de suporte da classe precisam estar ordenados")
+        return valores
+
+    @model_validator(mode="after")
+    def referencias_do_score_sao_completas(self) -> EntradaFitScore:
+        documentos_por_id = {item.id_documento: item for item in self.documentos}
+        if len(documentos_por_id) != len(self.documentos):
+            raise ValueError("documentos do fit-score não podem repetir id_documento")
+
+        ids_confirmados = {
+            item.id_afirmacao
+            for item in self.perfil_validado.afirmacoes_validadas
+            if item.situacao == "confirmada"
+        }
+        if not set(self.ids_afirmacoes_suporte_classe).issubset(ids_confirmados):
+            raise ValueError(
+                "o suporte da classe precisa referenciar apenas afirmações confirmadas"
+            )
+
+        ids_documentos_necessarios = {
+            item.id_documento
+            for item in self.perfil_validado.afirmacoes_validadas
+        }
+        ausentes = ids_documentos_necessarios - set(documentos_por_id)
+        if ausentes:
+            raise ValueError(
+                "faltam metadados dos documentos referenciados pelo perfil: "
+                f"{sorted(ausentes)}"
+            )
+        return self
+
+
+class PilarFitScore(BaseModel):
+    """Explicação auditável de um dos quatro pilares do fit-score."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pilar: PilarFit
+    pontos: int = Field(ge=0, le=10)
+    faixa: FaixaFit
+    ids_evidencias: list[int] = Field(default_factory=list)
+    travas_aplicadas: list[TravaFit] = Field(default_factory=list)
+
+    @field_validator("ids_evidencias")
+    @classmethod
+    def ids_do_pilar_sao_unicos_e_ordenados(cls, valores: list[int]) -> list[int]:
+        if any(valor < 1 for valor in valores):
+            raise ValueError("id_afirmacao começa em 1")
+        if len(set(valores)) != len(valores) or valores != sorted(valores):
+            raise ValueError("ids_evidencias precisam ser únicos e ordenados")
+        return valores
+
+    @field_validator("travas_aplicadas")
+    @classmethod
+    def travas_sao_unicas_e_na_ordem_do_contrato(
+        cls, valores: list[str]
+    ) -> list[str]:
+        if len(set(valores)) != len(valores):
+            raise ValueError("travas_aplicadas não pode repetir itens")
+        esperadas = [item for item in TRAVAS_FIT if item in valores]
+        if valores != esperadas:
+            raise ValueError("travas_aplicadas precisa seguir a ordem do contrato")
+        return valores
+
+    @model_validator(mode="after")
+    def faixa_corresponde_aos_pontos(self) -> PilarFitScore:
+        esperada: FaixaFit
+        if self.pontos <= 3:
+            esperada = "baixa"
+        elif self.pontos <= 7:
+            esperada = "media"
+        else:
+            esperada = "alta"
+        if self.faixa != esperada:
+            raise ValueError(
+                f"faixa {self.faixa!r} não corresponde a {self.pontos} pontos"
+            )
+        return self
+
+
+class FitScore(BaseModel):
+    """Pontuação final normalizada, com os componentes que permitem auditá-la."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total: int = Field(ge=0, le=100)
+    pilares: list[PilarFitScore]
+    estado_dimensoes_gap: list[EstadoDimensaoGap]
+    justificativa_curta: str = Field(min_length=1)
+    versao_rubrica: Literal["rubrica-v1"]
+
+    @model_validator(mode="after")
+    def componentes_seguem_a_ordem_do_contrato(self) -> FitScore:
+        pilares = tuple(item.pilar for item in self.pilares)
+        if pilares != PILARES_FIT:
+            raise ValueError(
+                "pilares deve conter os quatro pilares uma vez, na ordem do contrato"
+            )
+        dimensoes = tuple(item.dimensao for item in self.estado_dimensoes_gap)
+        if dimensoes != DIMENSOES_GAP:
+            raise ValueError(
+                "estado_dimensoes_gap deve seguir a ordem das quatro dimensões"
+            )
+
+        gates_non_ai = [
+            "gate_non_ai" in item.travas_aplicadas for item in self.pilares
+        ]
+        if any(gates_non_ai):
+            if (
+                not all(gates_non_ai)
+                or self.total != 0
+                or any(item.pontos != 0 for item in self.pilares)
+            ):
+                raise ValueError(
+                    "gate_non_ai precisa alcançar os quatro pilares e zerar "
+                    "pilares e total"
+                )
+        else:
+            esperado = round(
+                100 * sum(item.pontos for item in self.pilares) / 36
+            )
+            if self.total != esperado:
+                raise ValueError(
+                    f"total {self.total} não corresponde à normalização {esperado}"
+                )
+        return self
+
+
 class EstadoRadar(TypedDict, total=False):
     consulta_usuario: str
     startup_selecionada: int | None
@@ -655,5 +1014,13 @@ class EstadoRadar(TypedDict, total=False):
     classificacao: Classificacao | None
     perfil_validado: PerfilValidado | None
     confianca_perfil: ConfiancaPerfil | None
+    # ``ContextoNvidia`` e ``Recomendacao`` carregam ``AnyHttpUrl``, que o
+    # ``JsonPlusSerializer`` do checkpointer não serializa. O grafo grava a
+    # forma JSON do mesmo contrato — por isso a anotação é o dicionário, e não
+    # o modelo — e todo consumidor reidrata com ``model_validate`` na fronteira.
+    # ``FitScore`` não tem URL e por isso continua atravessando como instância.
+    contexto_nvidia: dict[str, Any] | None
+    recomendacoes: list[dict[str, Any]] | None
+    fit_score: FitScore | None
     erros: Annotated[list[str], operator.add]
     trajeto: Annotated[list[str], operator.add]

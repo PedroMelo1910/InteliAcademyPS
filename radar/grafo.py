@@ -10,14 +10,18 @@ from radar.agentes.classifier import Classifier
 from radar.agentes.extractor import Extractor
 from radar.agentes.evidence_validator import EvidenceValidator
 from radar.agentes.query_planner import QueryPlanner
+from radar.agentes.rag_nvidia import NvidiaRag
+from radar.agentes.recommendation import Recommendation
 from radar.agentes.retriever import Retriever
 from radar.agentes.roteadores import rotear_r1, rotear_r2, rotear_r3
 from radar.base_startups import BaseStartups
 from radar.contratos import EstadoRadar
 from radar.provedores import (
     ProvedorClassificacao,
+    ProvedorContextoNvidia,
     ProvedorPerfilExtraido,
     ProvedorPlanoConsulta,
+    ProvedorRecomendacaoRascunho,
 )
 
 
@@ -32,6 +36,8 @@ def montar_grafo(
     provedor_extracao: ProvedorPerfilExtraido,
     provedor_classificacao: ProvedorClassificacao,
     caminho_checkpoints: Path,
+    consultor_nvidia: ProvedorContextoNvidia,
+    provedor_recomendacao: ProvedorRecomendacaoRascunho,
 ):
     caminho_checkpoints.parent.mkdir(parents=True, exist_ok=True)
     conexao_checkpoints = sqlite3.connect(caminho_checkpoints, check_same_thread=False)
@@ -44,6 +50,10 @@ def montar_grafo(
     construtor.add_node("classifier", Classifier(provedor_classificacao))
     construtor.add_node("evidence_validator", EvidenceValidator(base))
     construtor.add_node("r3", _passagem_para_r3)
+    construtor.add_node("nvidia_rag", NvidiaRag(consultor_nvidia))
+    construtor.add_node(
+        "recommendation", Recommendation(base, provedor_recomendacao)
+    )
     construtor.add_edge(START, "query_planner")
     construtor.add_edge("query_planner", "retriever")
     construtor.add_conditional_edges(
@@ -63,15 +73,22 @@ def montar_grafo(
         rotear_r2,
         {"reextrair": "extractor", "evidencia_pronta": "r3"},
     )
-    # Recommendation e Briefing ainda não existem; os três resultados de R3
-    # terminam separadamente na fronteira aprovada deste marco.
+    # Só o caminho aderente consulta a base NVIDIA e recomenda. As duas
+    # variantes terminais continuam terminando sem recuperação: gastar uma
+    # consulta NVIDIA para uma empresa non-AI ou sem evidência seria produzir
+    # contexto para uma recomendação que não pode existir.
     construtor.add_conditional_edges(
         "r3",
         rotear_r3,
         {
             "evidencia_insuficiente": END,
             "nao_aderente": END,
-            "prosseguir": END,
+            "prosseguir": "nvidia_rag",
         },
     )
+    construtor.add_edge("nvidia_rag", "recommendation")
+    # O Briefing é o próximo marco. Até lá, o Recommendation termina o grafo:
+    # é melhor não haver briefing do que expor uma recomendação incompleta
+    # como se fosse um briefing pronto.
+    construtor.add_edge("recommendation", END)
     return construtor.compile(checkpointer=checkpointer), conexao_checkpoints

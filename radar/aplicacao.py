@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from radar.agentes.roteadores import rotear_r1
 from radar.base_startups import BaseStartups, inicializar_banco
+from radar.conhecimento_nvidia import ConhecimentoNvidia
 from radar.configuracao import (
     CAMINHO_BANCO,
     CAMINHO_CHECKPOINTS,
@@ -26,11 +27,18 @@ from radar.contratos import (
 from radar.grafo import montar_grafo
 from radar.provedores import (
     ProvedorClassificacao,
+    ProvedorContextoNvidia,
+    ProvedorEmbeddingNvidia,
     ProvedorGeminiClassificacao,
     ProvedorGeminiPerfilExtraido,
     ProvedorGeminiPlanoConsulta,
+    ProvedorGeminiRecomendacaoRascunho,
     ProvedorPerfilExtraido,
     ProvedorPlanoConsulta,
+    ProvedorRecomendacaoRascunho,
+    ProvedorRerankListwiseGemini,
+    ProvedorRerankNvidia,
+    RerankComFallback,
 )
 
 
@@ -125,15 +133,23 @@ def criar_aplicacao(
     caminho_checkpoints=CAMINHO_CHECKPOINTS,
     provedor_extracao: ProvedorPerfilExtraido | None = None,
     provedor_classificacao: ProvedorClassificacao | None = None,
+    consultor_nvidia: ProvedorContextoNvidia | None = None,
+    provedor_recomendacao: ProvedorRecomendacaoRascunho | None = None,
 ) -> AplicacaoRadar:
     inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
-    injetados = (provedor, provedor_extracao, provedor_classificacao)
+    injetados = (
+        provedor,
+        provedor_extracao,
+        provedor_classificacao,
+        consultor_nvidia,
+        provedor_recomendacao,
+    )
     if any(item is not None for item in injetados) and any(
         item is None for item in injetados
     ):
         raise ErroConfiguracao(
             "Para injeção offline, informe juntos os provedores do Query Planner, "
-            "do Extractor e do Classifier."
+            "do Extractor, do Classifier, do NVIDIA RAG e do Recommendation."
         )
     if all(item is None for item in injetados):
         load_dotenv(RAIZ_PROJETO / ".env")
@@ -143,13 +159,33 @@ def criar_aplicacao(
                 "GOOGLE_API_KEY não está configurada no .env local. "
                 "Adicione a chave e reinicie a aplicação."
             )
+        chave_nvidia = os.getenv("NVIDIA_API_KEY", "").strip()
+        if not chave_nvidia:
+            raise ErroConfiguracao(
+                "NVIDIA_API_KEY não está configurada no .env local. "
+                "O caminho aderente consulta a base de conhecimento NVIDIA; "
+                "adicione a chave e reinicie a aplicação."
+            )
         provedor = ProvedorGeminiPlanoConsulta(api_key)
         provedor_extracao = ProvedorGeminiPerfilExtraido(api_key)
         provedor_classificacao = ProvedorGeminiClassificacao(api_key)
+        # A composição de reranking aprovada no Entregável 2 é reusada como
+        # está: NVIDIA primário e fallback listwise no backbone LLM.
+        consultor_nvidia = ConhecimentoNvidia(
+            caminho_banco,
+            ProvedorEmbeddingNvidia(chave_nvidia),
+            RerankComFallback(
+                ProvedorRerankNvidia(chave_nvidia),
+                ProvedorRerankListwiseGemini(api_key),
+            ),
+        )
+        provedor_recomendacao = ProvedorGeminiRecomendacaoRascunho(api_key)
     assert (
         provedor is not None
         and provedor_extracao is not None
         and provedor_classificacao is not None
+        and consultor_nvidia is not None
+        and provedor_recomendacao is not None
     )
     grafo, conexao = montar_grafo(
         BaseStartups(caminho_banco),
@@ -157,5 +193,7 @@ def criar_aplicacao(
         provedor_extracao,
         provedor_classificacao,
         caminho_checkpoints,
+        consultor_nvidia,
+        provedor_recomendacao,
     )
     return AplicacaoRadar(grafo, conexao)
