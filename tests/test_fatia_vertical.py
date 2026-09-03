@@ -156,6 +156,30 @@ def provedor_recomendacao_padrao(id_afirmacao: int = 2):
     return ProvedorFixo({"rascunhos": [rascunho_nim(id_afirmacao)]})
 
 
+def rascunho_briefing(id_afirmacao: int = 1):
+    """Rascunho mínimo do Briefing, ancorado numa afirmação confirmada."""
+    return {
+        "tese": {
+            "texto": "A empresa merece a conversa técnica pela dor documentada.",
+            "ids_afirmacoes_suporte": [id_afirmacao],
+        },
+        "sintese_executiva": {
+            "texto": "A plataforma atende empresas e depende de API externa de IA.",
+            "ids_afirmacoes_suporte": [id_afirmacao],
+        },
+        "pontos_de_conversa": [
+            {"texto": "Perguntar o custo atual por mil chamadas.",
+             "ids_afirmacoes_suporte": [id_afirmacao]},
+            {"texto": "Explorar a meta de latência em produção.",
+             "ids_afirmacoes_suporte": [id_afirmacao]},
+        ],
+    }
+
+
+def provedor_briefing_padrao(id_afirmacao: int = 1):
+    return ProvedorFixo(rascunho_briefing(id_afirmacao))
+
+
 def provedores(plano, perfil=None, classificacao=None):
     """Os três provedores da injeção offline, na ordem da fábrica."""
     return (
@@ -191,6 +215,7 @@ def test_ranking_da_aplicacao_recebe_resultado_real_do_retriever(
         provedor, caminho_banco, checkpoints, provedor_extracao, provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
 
     saida = aplicacao.executar_descoberta("fintech brasileira de benefícios com cartão")
@@ -235,6 +260,7 @@ def test_caminho_selecionado_percorre_extractor_classifier_e_validator(
         provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     estado = aplicacao.grafo.invoke(
         estado_selecionado(id_caju),
@@ -261,6 +287,7 @@ def test_caminho_selecionado_percorre_extractor_classifier_e_validator(
         "evidence_validator",
         "nvidia_rag",
         "recommendation",
+        "briefing",
     ]
     assert "conteudo_texto" not in json.dumps(
         estado["perfil_extraido"].model_dump(), ensure_ascii=False
@@ -284,6 +311,7 @@ def test_classificacao_sobrevive_ao_checkpoint(tmp_path, caminho_banco):
         provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     config = {"configurable": {"thread_id": "serializacao"}}
     aplicacao.grafo.invoke(estado_selecionado(id_caju), config=config)
@@ -300,6 +328,7 @@ def test_classificacao_sobrevive_ao_checkpoint(tmp_path, caminho_banco):
         "evidence_validator",
         "nvidia_rag",
         "recommendation",
+        "briefing",
     ]
 
 
@@ -320,6 +349,7 @@ def test_falha_do_classifier_interrompe_o_caminho_sem_fabricar_classificacao(
         provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     config = {"configurable": {"thread_id": "classifier-invalido"}}
 
@@ -348,6 +378,7 @@ def test_r2_reexecuta_toda_a_cadeia_em_modo_estrito_e_remove_estado_velho(
         tmp_path / "checkpoints_reextracao.db",
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -398,6 +429,7 @@ def test_r2_reexecuta_toda_a_cadeia_em_modo_estrito_e_remove_estado_velho(
         "evidence_validator",
         "nvidia_rag",
         "recommendation",
+        "briefing",
     ]
     segundo_prompt = "\n".join(
         conteudo for _papel, conteudo in provedor_extracao.mensagens[1]
@@ -421,6 +453,7 @@ def test_falha_do_extractor_interrompe_o_caminho_sem_fabricar_perfil(
         provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     id_caju = perfil_caju(caminho_banco)["id_startup"]
 
@@ -466,6 +499,7 @@ def test_grafo_preserva_relaxamento_e_termino_sem_resultado(
         provedor_classificacao,
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
 
     estado = aplicacao.grafo.invoke(
@@ -564,6 +598,7 @@ def test_evidencia_nao_literal_percorre_r2_ate_o_teto_e_para_em_evidencia_insufi
         tmp_path / "checkpoints_nao_literal.db",
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -647,6 +682,7 @@ def test_conflito_resolvido_por_reextracao_deixa_o_aviso_datado_no_historico(
         tmp_path / "checkpoints_conflito.db",
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     try:
         saida = grafo.invoke(
@@ -689,6 +725,7 @@ def test_nova_descoberta_no_mesmo_thread_nao_herda_a_analise_antiga(
         tmp_path / "checkpoints_reuso.db",
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(),
+        provedor_briefing_padrao(),
     )
     config = {"configurable": {"thread_id": "reuso"}}
     try:
@@ -802,6 +839,7 @@ def test_duas_analises_no_mesmo_thread_produzem_avisos_de_conflito_distinguiveis
         tmp_path / "checkpoints_dois_conflitos.db",
         consultor_nvidia_padrao(),
         provedor_recomendacao_padrao(3),
+        provedor_briefing_padrao(),
     )
     config = {"configurable": {"thread_id": "dois-conflitos"}}
     try:

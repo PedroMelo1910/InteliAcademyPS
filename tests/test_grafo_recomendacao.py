@@ -13,8 +13,8 @@ import sqlite3
 import pytest
 
 from radar.agentes.rag_nvidia import ErroRagNvidia
-from radar.agentes.recommendation import ErroRecommendation
 from radar.contratos import (
+    Briefing,
     ContextoNvidia,
     FiltrosEstruturados,
     FitScore,
@@ -24,6 +24,7 @@ from radar.contratos import (
 from radar.grafo import montar_grafo
 from tests.conftest import (
     ConsultorNvidiaFalso,
+    recomendacao_falsa,
     ProvedorSequencialFalso,
     contexto_nvidia_falso,
 )
@@ -36,7 +37,8 @@ TRAJETO_ATE_R3 = (
     "classifier",
     "evidence_validator",
 )
-TRAJETO_COMPLETO = TRAJETO_ATE_R3 + ("nvidia_rag", "recommendation")
+TRAJETO_COMPLETO = TRAJETO_ATE_R3 + ("nvidia_rag", "recommendation", "briefing")
+TRAJETO_BYPASS = TRAJETO_ATE_R3 + ("briefing",)
 
 
 class ProvedorFixo:
@@ -171,8 +173,28 @@ def estado_selecionado(id_startup, **ajustes):
     return base
 
 
+def rascunho_briefing():
+    """Rascunho mínimo e válido do Briefing, ancorado na afirmação 1."""
+    return {
+        "tese": {
+            "texto": "A empresa tem lacuna de distribuição confirmada.",
+            "ids_afirmacoes_suporte": [1],
+        },
+        "sintese_executiva": {
+            "texto": "O canal de distribuição é o ponto de conversa da análise.",
+            "ids_afirmacoes_suporte": [1],
+        },
+        "pontos_de_conversa": [
+            {"texto": "Perguntar como o canal atual é remunerado.",
+             "ids_afirmacoes_suporte": [1]},
+            {"texto": "Explorar o plano de expansão comercial.",
+             "ids_afirmacoes_suporte": [1]},
+        ],
+    }
+
+
 def montar(caminho_banco, tmp_path, *, perfil, classe="AI-enabled", consultor=None,
-           recomendacao=None, nome="checkpoints.db"):
+           recomendacao=None, briefing=None, nome="checkpoints.db"):
     from radar.base_startups import BaseStartups
 
     consultor = consultor if consultor is not None else ConsultorNvidiaFalso()
@@ -180,6 +202,11 @@ def montar(caminho_banco, tmp_path, *, perfil, classe="AI-enabled", consultor=No
         recomendacao
         if recomendacao is not None
         else ProvedorSequencialFalso(lote(rascunho_valido()))
+    )
+    briefing = (
+        briefing
+        if briefing is not None
+        else ProvedorSequencialFalso(rascunho_briefing(), rascunho_briefing())
     )
     grafo, conexao = montar_grafo(
         BaseStartups(caminho_banco),
@@ -189,6 +216,7 @@ def montar(caminho_banco, tmp_path, *, perfil, classe="AI-enabled", consultor=No
         tmp_path / nome,
         consultor,
         recomendacao,
+        briefing,
     )
     return grafo, conexao, consultor, recomendacao
 
@@ -279,7 +307,7 @@ def test_nao_aderente_termina_sem_recuperacao_nvidia(tmp_path, caminho_banco):
     finally:
         conexao.close()
 
-    assert tuple(saida["trajeto"]) == TRAJETO_ATE_R3
+    assert tuple(saida["trajeto"]) == TRAJETO_BYPASS
     assert consultor.chamadas == 0
     assert recomendacao.chamadas == 0
     assert saida["contexto_nvidia"] is None
@@ -305,7 +333,7 @@ def test_evidencia_insuficiente_termina_sem_recuperacao_nvidia(
     finally:
         conexao.close()
 
-    assert saida["trajeto"][-1] == "evidence_validator"
+    assert saida["trajeto"][-1] == "briefing"
     assert "nvidia_rag" not in saida["trajeto"]
     assert consultor.chamadas == 0
     assert recomendacao.chamadas == 0
@@ -368,30 +396,40 @@ def test_falha_do_rag_nao_deixa_contexto_nvidia_velho_no_checkpoint(
     assert recomendacao.chamadas == 0
 
 
-def test_falha_da_recomendacao_nao_deixa_recomendacao_velha_no_checkpoint(
+def test_descarte_total_nao_deixa_recomendacao_velha_no_checkpoint(
     tmp_path, caminho_banco
 ):
+    """§11.3: descartar tudo esvazia o estado — nunca preserva o que veio antes.
+
+    Antes do marco do Briefing este caminho derrubava o grafo. Agora ele segue
+    para o Briefing terminal, e a garantia que importa continua sendo a mesma:
+    a recomendação de outra análise não pode sobreviver no checkpoint.
+    """
     perfil = perfil_caju(caminho_banco)
+    velha = recomendacao_falsa().model_dump(mode="json")
     provedor = ProvedorSequencialFalso(
         lote(rascunho_valido(id_chunk=999)), lote(rascunho_valido(id_chunk=999))
     )
     grafo, conexao, _consultor, _rec = montar(
         caminho_banco, tmp_path, perfil=perfil, recomendacao=provedor
     )
-    config = {"configurable": {"thread_id": "recomendacao-falha"}}
+    config = {"configurable": {"thread_id": "recomendacao-descartada"}}
     try:
-        with pytest.raises(ErroRecommendation):
-            grafo.invoke(
-                estado_selecionado(perfil["id_startup"], recomendacoes=[]),
-                config=config,
-            )
+        saida = grafo.invoke(
+            estado_selecionado(perfil["id_startup"], recomendacoes=[velha]),
+            config=config,
+        )
         estado = grafo.get_state(config).values
     finally:
         conexao.close()
 
-    assert estado.get("recomendacoes") is None
-    assert estado.get("fit_score") is None
     assert provedor.chamadas == 2
+    for valores in (saida, estado):
+        assert valores["recomendacoes"] == []
+        assert valores["fit_score"] is None
+        final = Briefing.model_validate(valores["briefing"])
+        assert final.variante == "evidencia_insuficiente"
+        assert final.recomendacoes == []
 
 
 def test_threads_distintos_nao_compartilham_contexto_nem_recomendacao(

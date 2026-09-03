@@ -31,6 +31,7 @@ CAMPOS_DERIVADOS_DA_EXTRACAO: tuple[str, ...] = (
     "contexto_nvidia",
     "recomendacoes",
     "fit_score",
+    "briefing",
 )
 
 

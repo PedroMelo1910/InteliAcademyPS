@@ -17,6 +17,7 @@ from radar.configuracao import (
     MODELO_RERANK_NVIDIA,
 )
 from radar.contratos import (
+    BriefingRascunho,
     Classificacao,
     PerfilExtraido,
     PlanoConsulta,
@@ -128,6 +129,35 @@ class ProvedorGeminiRecomendacaoRascunho:
         )
         self._estruturado = modelo.with_structured_output(
             RascunhosRecomendacao, method="json_schema"
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorBriefingRascunho(Protocol):
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        """Produz as ~6 frases do briefing, ainda sujeitas à conferência do nó."""
+
+
+class ProvedorGeminiBriefingRascunho:
+    """Adaptador de structured output do Briefing; o nó não conhece a rede.
+
+    O schema oferecido ao modelo é o reduzido: tese, síntese e pontos, cada um
+    com os ids que ele escolheu. Classe, fit-score, recomendações, fontes,
+    avisos e rodapé não existem nele.
+    """
+
+    def __init__(self, api_key: str):
+        modelo = ChatGoogleGenerativeAI(
+            model=MODELO_GEMINI,
+            api_key=api_key,
+            temperature=None,
+            retries=1,
+            request_timeout=60,
+        )
+        self._estruturado = modelo.with_structured_output(
+            BriefingRascunho, method="json_schema"
         )
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:

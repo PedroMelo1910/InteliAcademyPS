@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -17,6 +19,7 @@ from radar.configuracao import (
     RAIZ_PROJETO,
 )
 from radar.contratos import (
+    Briefing,
     DocumentoRecuperado,
     EmpresaCandidata,
     EstadoRadar,
@@ -26,9 +29,11 @@ from radar.contratos import (
 )
 from radar.grafo import montar_grafo
 from radar.provedores import (
+    ProvedorBriefingRascunho,
     ProvedorClassificacao,
     ProvedorContextoNvidia,
     ProvedorEmbeddingNvidia,
+    ProvedorGeminiBriefingRascunho,
     ProvedorGeminiClassificacao,
     ProvedorGeminiPerfilExtraido,
     ProvedorGeminiPlanoConsulta,
@@ -52,6 +57,7 @@ class ItemRanking:
 
 @dataclass(frozen=True)
 class SaidaDescoberta:
+    consulta: str
     rota: ResultadoR1
     plano: PlanoConsulta
     resultado: ResultadoRecuperacao
@@ -92,6 +98,21 @@ def construir_ranking(resultado: ResultadoRecuperacao) -> tuple[ItemRanking, ...
     return tuple(itens)
 
 
+@dataclass(frozen=True)
+class SaidaAprofundamento:
+    """O que a interface recebe ao clicar numa candidata da descoberta."""
+
+    briefing: Briefing
+    plano: PlanoConsulta
+    id_startup: int
+    trajeto: tuple[str, ...]
+    erros: tuple[str, ...]
+
+
+class ErroAplicacao(RuntimeError):
+    """Uso inválido da fronteira da aplicação, antes de tocar o grafo."""
+
+
 class AplicacaoRadar:
     def __init__(self, grafo, conexao_checkpoints):
         self.grafo = grafo
@@ -117,6 +138,7 @@ class AplicacaoRadar:
         plano = PlanoConsulta.model_validate(estado_final["plano_consulta"])
         rota = rotear_r1(estado_final)
         return SaidaDescoberta(
+            consulta=consulta,
             rota=rota,
             plano=plano,
             resultado=resultado,
@@ -124,6 +146,54 @@ class AplicacaoRadar:
             tentativas_relaxamento=int(estado_final.get("tentativas_relaxamento", 0)),
             criterios_relaxados=tuple(estado_final.get("criterios_relaxados", [])),
             trajeto=tuple(estado_final.get("trajeto", [])),
+        )
+
+
+    def executar_aprofundamento(
+        self, descoberta: SaidaDescoberta, id_startup: int
+    ) -> SaidaAprofundamento:
+        """Segunda invocação do mesmo grafo, com a startup escolhida (§1.3).
+
+        Não há cirurgia de thread nem ``interrupt``: o estado inicial reaproveita
+        a consulta e o ``PlanoConsulta`` já validados da descoberta, o Query
+        Planner pula (§2.3), o Retriever faz a busca pinada e o fluxo corre até
+        o Briefing.
+        """
+        candidatas = {
+            empresa.id_startup for empresa in descoberta.resultado.empresas
+        }
+        if id_startup not in candidatas:
+            raise ErroAplicacao(
+                f"a startup {id_startup} não está entre as candidatas desta "
+                f"descoberta ({sorted(candidatas)}); a interface só aprofunda o "
+                "que o ranking devolveu"
+            )
+        estado_inicial: EstadoRadar = {
+            "consulta_usuario": descoberta.consulta,
+            "startup_selecionada": id_startup,
+            "plano_consulta": descoberta.plano,
+            "tentativas_relaxamento": descoberta.tentativas_relaxamento,
+            "tentativas_extracao": 0,
+            "criterios_relaxados": list(descoberta.criterios_relaxados),
+            "erros": [],
+            "trajeto": [],
+        }
+        estado_final = self.grafo.invoke(
+            estado_inicial,
+            config={"configurable": {"thread_id": str(uuid4())}},
+        )
+        bruto = estado_final.get("briefing")
+        if bruto is None:
+            raise ErroAplicacao(
+                "o grafo terminou sem briefing para a startup "
+                f"{id_startup}; nenhum resultado parcial é exposto"
+            )
+        return SaidaAprofundamento(
+            briefing=Briefing.model_validate(bruto),
+            plano=PlanoConsulta.model_validate(estado_final["plano_consulta"]),
+            id_startup=id_startup,
+            trajeto=tuple(estado_final.get("trajeto", [])),
+            erros=tuple(estado_final.get("erros", [])),
         )
 
 
@@ -135,6 +205,8 @@ def criar_aplicacao(
     provedor_classificacao: ProvedorClassificacao | None = None,
     consultor_nvidia: ProvedorContextoNvidia | None = None,
     provedor_recomendacao: ProvedorRecomendacaoRascunho | None = None,
+    provedor_briefing: ProvedorBriefingRascunho | None = None,
+    relogio: Callable[[], date] | None = None,
 ) -> AplicacaoRadar:
     inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
     injetados = (
@@ -143,13 +215,15 @@ def criar_aplicacao(
         provedor_classificacao,
         consultor_nvidia,
         provedor_recomendacao,
+        provedor_briefing,
     )
     if any(item is not None for item in injetados) and any(
         item is None for item in injetados
     ):
         raise ErroConfiguracao(
             "Para injeção offline, informe juntos os provedores do Query Planner, "
-            "do Extractor, do Classifier, do NVIDIA RAG e do Recommendation."
+            "do Extractor, do Classifier, do NVIDIA RAG, do Recommendation e "
+            "do Briefing."
         )
     if all(item is None for item in injetados):
         load_dotenv(RAIZ_PROJETO / ".env")
@@ -180,12 +254,14 @@ def criar_aplicacao(
             ),
         )
         provedor_recomendacao = ProvedorGeminiRecomendacaoRascunho(api_key)
+        provedor_briefing = ProvedorGeminiBriefingRascunho(api_key)
     assert (
         provedor is not None
         and provedor_extracao is not None
         and provedor_classificacao is not None
         and consultor_nvidia is not None
         and provedor_recomendacao is not None
+        and provedor_briefing is not None
     )
     grafo, conexao = montar_grafo(
         BaseStartups(caminho_banco),
@@ -195,5 +271,7 @@ def criar_aplicacao(
         caminho_checkpoints,
         consultor_nvidia,
         provedor_recomendacao,
+        provedor_briefing,
+        relogio,
     )
     return AplicacaoRadar(grafo, conexao)

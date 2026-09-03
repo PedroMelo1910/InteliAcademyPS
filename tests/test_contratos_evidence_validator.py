@@ -291,11 +291,16 @@ def test_estado_radar_declara_a_confianca_do_perfil():
     assert "confianca_perfil" in EstadoRadar.__annotations__
 
 
-def test_estado_radar_declara_fronteira_do_proximo_marco_sem_briefing():
-    for campo in ("contexto_nvidia", "recomendacoes", "fit_score"):
+def test_estado_radar_declara_a_cadeia_completa_ate_o_briefing():
+    """O marco do Briefing fechou: o campo de saída agora existe no state.
+
+    Antes deste marco o teste provava a ausência de ``briefing`` — a fronteira
+    do trabalho seguinte. Agora ele prova a presença do campo terminal e
+    mantém a guarda contra o nome no singular, que nunca existiu.
+    """
+    for campo in ("contexto_nvidia", "recomendacoes", "fit_score", "briefing"):
         assert campo in EstadoRadar.__annotations__
-    for campo in ("recomendacao", "briefing"):
-        assert campo not in EstadoRadar.__annotations__
+    assert "recomendacao" not in EstadoRadar.__annotations__
 
 
 # --------------------------------------------------------------------------

@@ -17,6 +17,7 @@ CAMPOS_DERIVADOS_DA_RECUPERACAO: tuple[str, ...] = (
     "contexto_nvidia",
     "recomendacoes",
     "fit_score",
+    "briefing",
 )
 
 

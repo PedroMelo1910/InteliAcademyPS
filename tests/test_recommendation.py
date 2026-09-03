@@ -204,6 +204,21 @@ def executar(provedor, estado=None, base=None):
     return no(estado if estado is not None else estado_pos_rag())
 
 
+def sem_recomendacao(saida) -> str:
+    """§11.3: descarte total vira estado vazio e honesto, não exceção.
+
+    O nó deixou de derrubar o grafo quando nenhuma recomendação sobrevive à
+    conferência de proveniência: a análise segue para o Briefing terminal com
+    ``recomendacoes`` vazia, ``fit_score`` nulo e o motivo em ``erros``. A
+    garantia sob teste é a mesma de antes — rascunho sem lastro **nunca** vira
+    recomendação —, só o modo de encerrar mudou.
+    """
+    assert saida["recomendacoes"] == []
+    assert saida["fit_score"] is None
+    assert saida["erros"]
+    return " | ".join(saida["erros"])
+
+
 # ----------------------------------------------------------------------
 # Caminho normal e construção determinística
 # ----------------------------------------------------------------------
@@ -392,9 +407,9 @@ def test_id_de_afirmacao_inventado_e_descartado_apos_o_retry():
         lote(rascunho(ids_afirmacoes=(99,))),
         lote(rascunho(ids_afirmacoes=(98,))),
     )
-    with pytest.raises(ErroRecommendation, match="nenhuma recomendação"):
-        executar(provedor)
+    motivo = sem_recomendacao(executar(provedor))
     assert provedor.chamadas == 2
+    assert "98" in motivo
 
 
 def test_id_de_chunk_inventado_e_descartado_apos_o_retry():
@@ -402,9 +417,9 @@ def test_id_de_chunk_inventado_e_descartado_apos_o_retry():
         lote(rascunho(ids_chunks=(999,))),
         lote(rascunho(ids_chunks=(998,))),
     )
-    with pytest.raises(ErroRecommendation):
-        executar(provedor)
+    motivo = sem_recomendacao(executar(provedor))
     assert provedor.chamadas == 2
+    assert "998" in motivo
 
 
 def test_afirmacao_derrubada_nao_serve_como_evidencia():
@@ -431,9 +446,7 @@ def test_id_de_afirmacao_de_outro_perfil_nao_e_aceito():
     provedor = ProvedorSequencialFalso(
         lote(rascunho(ids_afirmacoes=(4,))), lote(rascunho(ids_afirmacoes=(4,)))
     )
-    with pytest.raises(ErroRecommendation) as capturado:
-        executar(provedor)
-    assert "4" in str(capturado.value)
+    assert "4" in sem_recomendacao(executar(provedor))
 
 
 def test_id_de_chunk_fora_do_contexto_atual_nao_e_aceito():
@@ -444,8 +457,7 @@ def test_id_de_chunk_fora_do_contexto_atual_nao_e_aceito():
     provedor = ProvedorSequencialFalso(
         lote(rascunho(ids_chunks=(101,))), lote(rascunho(ids_chunks=(101,)))
     )
-    with pytest.raises(ErroRecommendation):
-        executar(provedor, estado_pos_rag(contexto=contexto))
+    sem_recomendacao(executar(provedor, estado_pos_rag(contexto=contexto)))
 
 
 def test_startup_fora_do_conjunto_recuperado_interrompe_o_no():
@@ -477,9 +489,7 @@ def test_tecnologia_fora_do_conjunto_candidato_do_gap_e_recusada():
         lote(rascunho(tecnologias=("NVIDIA Riva",))),
         lote(rascunho(tecnologias=("NVIDIA Riva",))),
     )
-    with pytest.raises(ErroRecommendation) as capturado:
-        executar(provedor)
-    assert "NVIDIA Riva" in str(capturado.value)
+    assert "NVIDIA Riva" in sem_recomendacao(executar(provedor))
 
 
 def test_tecnologia_candidata_do_gap_escolhido_e_aceita():
@@ -507,9 +517,7 @@ def test_citacao_apenas_conceitual_e_recusada():
     provedor = ProvedorSequencialFalso(
         lote(rascunho(ids_chunks=(106,))), lote(rascunho(ids_chunks=(106,)))
     )
-    with pytest.raises(ErroRecommendation) as capturado:
-        executar(provedor)
-    assert "tecnologia" in str(capturado.value)
+    assert "tecnologia" in sem_recomendacao(executar(provedor))
 
 
 def test_chunk_conceitual_e_aceito_como_contexto_adicional():
@@ -550,8 +558,7 @@ def test_nao_existe_segundo_retry():
         lote(rascunho(ids_afirmacoes=(99,))),
         lote(rascunho(ids_afirmacoes=(99,))),
     )
-    with pytest.raises(ErroRecommendation):
-        executar(provedor)
+    sem_recomendacao(executar(provedor))
     assert provedor.chamadas == 2
 
 
@@ -578,8 +585,7 @@ def test_falha_completa_nao_grava_recomendacao_nem_fit_score():
     provedor = ProvedorSequencialFalso(
         lote(rascunho(ids_chunks=(999,))), lote(rascunho(ids_chunks=(999,)))
     )
-    with pytest.raises(ErroRecommendation, match="nenhuma recomendação"):
-        executar(provedor)
+    assert "nenhuma recomendação" in sem_recomendacao(executar(provedor))
 
 
 def test_resposta_fora_do_contrato_estruturado_consome_o_mesmo_retry():
@@ -658,12 +664,11 @@ def test_prompt_nao_envia_trecho_citado_nem_classe_de_referencia():
 
 
 def _recusa(rascunhos, estado=None):
-    """Executa com o mesmo rascunho nas duas tentativas e devolve o erro."""
+    """Executa com o mesmo rascunho nas duas tentativas e devolve o motivo."""
     provedor = ProvedorSequencialFalso(lote(*rascunhos), lote(*rascunhos))
-    with pytest.raises(ErroRecommendation) as capturado:
-        executar(provedor, estado)
+    saida = executar(provedor, estado)
     assert provedor.chamadas == 2
-    return str(capturado.value)
+    return sem_recomendacao(saida)
 
 
 def test_dimensao_estrutural_desconhecida_e_recusada_como_gap():
@@ -791,8 +796,8 @@ def test_sem_nenhum_gap_sustentado_o_provedor_nao_e_chamado():
         hosts=["fonte-a.example"],
     )
     provedor = ProvedorSequencialFalso(lote(rascunho()))
-    with pytest.raises(ErroRecommendation, match="nenhum gap está sustentado"):
-        executar(provedor, estado_pos_rag(perfil=perfil))
+    motivo = sem_recomendacao(executar(provedor, estado_pos_rag(perfil=perfil)))
+    assert "nenhum gap está sustentado" in motivo
     assert provedor.chamadas == 0
 
 
@@ -807,11 +812,13 @@ def test_sem_gap_sustentado_nada_e_gravado_nem_pontuado(monkeypatch):
     perfil = perfil_validado_falso(
         [afirmacao_validada_falsa(1, "outro")], hosts=["fonte-a.example"]
     )
-    with pytest.raises(ErroRecommendation, match="nenhum gap está sustentado"):
+    motivo = sem_recomendacao(
         executar(
             ProvedorSequencialFalso(lote(rascunho())),
             estado_pos_rag(perfil=perfil),
         )
+    )
+    assert "nenhum gap está sustentado" in motivo
     assert chamadas == []
 
 

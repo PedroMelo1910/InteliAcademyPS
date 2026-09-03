@@ -175,6 +175,11 @@ DIMENSOES_ESTRUTURAIS = (
 )
 
 
+def trecho_citado_falso(id_afirmacao: int) -> str:
+    """O trecho canônico da afirmação: recomendação e perfil citam o mesmo."""
+    return f"Trecho público verificável para a evidência {id_afirmacao} citada."
+
+
 def afirmacao_validada_falsa(
     id_afirmacao: int,
     categoria: str,
@@ -183,6 +188,7 @@ def afirmacao_validada_falsa(
     situacao: str = "confirmada",
     id_documento: int | None = None,
     texto: str | None = None,
+    motivo: str | None = None,
 ):
     """``AfirmacaoValidada`` mínima e coerente com as regras de polaridade."""
     from radar.contratos import AfirmacaoValidada
@@ -195,11 +201,13 @@ def afirmacao_validada_falsa(
         categoria=categoria,
         polaridade=polaridade,
         id_documento=id_documento if id_documento is not None else id_afirmacao,
-        trecho_citado=(
-            f"Trecho público verificável para a evidência {id_afirmacao} citada."
-        ),
+        trecho_citado=trecho_citado_falso(id_afirmacao),
         situacao=situacao,
-        motivo=None if situacao == "confirmada" else "Trecho não ocorre na fonte.",
+        motivo=(
+            None
+            if situacao == "confirmada"
+            else (motivo or "Trecho não ocorre na fonte.")
+        ),
     )
 
 
@@ -267,3 +275,158 @@ class ProvedorSequencialFalso:
         if isinstance(resposta, Exception):
             raise resposta
         return resposta
+
+
+# ----------------------------------------------------------------------
+# Apoio do marco Briefing
+# ----------------------------------------------------------------------
+
+
+def citacao_nvidia_falsa(id_chunk: int = 101, **ajustes):
+    """``CitacaoNvidia`` idêntica ao chunk correspondente do contexto falso."""
+    from radar.contratos import CitacaoNvidia
+
+    trecho = trecho_nvidia_falso(id_chunk)
+    campos = {
+        "id_chunk": trecho.id_chunk,
+        "topico": trecho.topico,
+        "origem": trecho.origem,
+        "tecnologia": trecho.tecnologia,
+        "fonte_url": trecho.fonte_url,
+        "breadcrumb": trecho.breadcrumb,
+    }
+    campos.update(ajustes)
+    return CitacaoNvidia(**campos)
+
+
+def recomendacao_falsa(
+    gap: str = "distribuicao",
+    *,
+    tecnologias: list[str] | None = None,
+    id_afirmacao: int = 1,
+    id_documento: int = 1,
+    id_chunk: int = 101,
+    url_fonte: str = "https://fonte-a.example/materia",
+    trecho_citado: str | None = None,
+    citacao=None,
+):
+    """``Recomendacao`` completa e coerente com o perfil e o contexto falsos.
+
+    O trecho citado é o da afirmação referenciada e a citação NVIDIA reproduz o
+    chunk referenciado — é assim que o nó Recommendation real a constrói.
+    """
+    from radar.contratos import EvidenciaStartup, ProximaAcao, Recomendacao
+
+    return Recomendacao(
+        gap_enderecado=gap,
+        tecnologias=tecnologias or ["NVIDIA Inception"],
+        justificativa_tecnica="O programa abre acesso a suporte técnico dedicado.",
+        justificativa_negocio="A validação encurta o ciclo de venda enterprise.",
+        prioridade="media",
+        complexidade="baixa",
+        proxima_acao=ProximaAcao(
+            tipo_acao="convite_inception",
+            detalhe="Enviar o convite de admissão ao programa nesta semana.",
+        ),
+        evidencias_startup=[
+            EvidenciaStartup(
+                id_afirmacao=id_afirmacao,
+                id_documento=id_documento,
+                url_fonte=url_fonte,
+                trecho_citado=trecho_citado or trecho_citado_falso(id_afirmacao),
+            )
+        ],
+        citacoes_nvidia=[
+            citacao if citacao is not None else citacao_nvidia_falsa(id_chunk)
+        ],
+    )
+
+
+def cabecalho_falso(**ajustes):
+    from datetime import date
+
+    from radar.contratos import CabecalhoBriefing
+
+    campos = {
+        "nome": "Caju",
+        "site": "https://www.caju.com.br/",
+        "setor": "Fintech / RH",
+        "estagio": "série B",
+        "localizacao": "São Paulo, SP",
+        "data_geracao": date(2026, 9, 3),
+        "consulta_original": "fintech brasileira de benefícios com cartão",
+    }
+    campos.update(ajustes)
+    return CabecalhoBriefing(**campos)
+
+
+def rodape_falso(**ajustes):
+    from datetime import date
+
+    from radar.contratos import RodapeBriefing
+
+    campos = {
+        "versao_rubrica": "rubrica-v1",
+        "data_execucao": date(2026, 9, 3),
+        "afirmacoes_confirmadas": 2,
+        "afirmacoes_derrubadas": 0,
+        "trajeto": ["extractor", "classifier", "evidence_validator", "briefing"],
+        "rota_r3": "prosseguir",
+    }
+    campos.update(ajustes)
+    return RodapeBriefing(**campos)
+
+
+def fonte_falsa(
+    url: str = "https://fonte-a.example/materia",
+    *,
+    tipo: str = "notícia",
+    titulo: str = "Matéria pública sobre a startup",
+    data_publicacao=None,
+):
+    from radar.contratos import FonteBriefing, normalizar_dominio
+    from urllib.parse import urlparse
+
+    return FonteBriefing(
+        url_fonte=url,
+        host_normalizado=normalizar_dominio(urlparse(url).hostname or ""),
+        tipo=tipo,
+        titulo=titulo,
+        data_publicacao=data_publicacao,
+    )
+
+
+def briefing_normal_falso(**ajustes):
+    """``Briefing`` normal mínimo e válido, para exercitar o contrato."""
+    from radar.contratos import Briefing, ConclusaoAncorada, VereditoBriefing
+
+    campos = {
+        "variante": "normal",
+        "cabecalho": cabecalho_falso(),
+        "veredito": VereditoBriefing(
+            classe="AI-enabled",
+            fit_score_total=61,
+            tese="A empresa usa IA no produto e tem lacuna de distribuição.",
+            ids_afirmacoes_suporte=[1],
+        ),
+        "sintese_executiva": ConclusaoAncorada(
+            texto="A startup opera benefícios corporativos com apoio de modelos de terceiros.",
+            ids_afirmacoes_suporte=[1, 2],
+        ),
+        "pontos_de_conversa": [
+            ConclusaoAncorada(
+                texto="Perguntar como o time mede custo por inferência.",
+                ids_afirmacoes_suporte=[2],
+            ),
+            ConclusaoAncorada(
+                texto="Explorar o canal de distribuição atual.",
+                ids_afirmacoes_suporte=[1],
+            ),
+        ],
+        "recomendacoes": [recomendacao_falsa()],
+        "fontes": [fonte_falsa()],
+        "avisos": [],
+        "rodape": rodape_falso(),
+    }
+    campos.update(ajustes)
+    return Briefing(**campos)

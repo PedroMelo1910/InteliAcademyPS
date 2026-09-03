@@ -20,6 +20,7 @@ from radar.provedores import ProvedorContextoNvidia
 CAMPOS_DERIVADOS_DO_CONTEXTO_NVIDIA: tuple[str, ...] = (
     "recomendacoes",
     "fit_score",
+    "briefing",
 )
 
 # Só estas duas categorias descrevem dor operacional documentada; as demais

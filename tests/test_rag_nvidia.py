@@ -161,7 +161,11 @@ def test_no_invalida_os_campos_derivados_do_contexto():
     saida = NvidiaRag(ConsultorNvidiaFalso())(
         estado_pos_r3(recomendacoes=["recomendação velha"], fit_score={"total": 99})
     )
-    assert CAMPOS_DERIVADOS_DO_CONTEXTO_NVIDIA == ("recomendacoes", "fit_score")
+    assert CAMPOS_DERIVADOS_DO_CONTEXTO_NVIDIA == (
+        "recomendacoes",
+        "fit_score",
+        "briefing",
+    )
     for campo in CAMPOS_DERIVADOS_DO_CONTEXTO_NVIDIA:
         assert saida[campo] is None
 
@@ -172,6 +176,7 @@ def test_no_nao_escreve_campos_que_nao_lhe_pertencem():
         "contexto_nvidia",
         "recomendacoes",
         "fit_score",
+        "briefing",
         "trajeto",
     }
 

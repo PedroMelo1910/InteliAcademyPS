@@ -916,6 +916,7 @@ def test_no_nunca_coloca_documentos_no_estado(dupla: BaseDupla):
         "contexto_nvidia",
         "recomendacoes",
         "fit_score",
+        "briefing",
         "trajeto",
         "erros",
     }

@@ -117,11 +117,15 @@ class Recommendation:
         # aqui só produziria rascunhos que seriam todos descartados.
         sustentados = gaps_sustentados(perfil)
         if not sustentados:
-            raise ErroRecommendation(
+            # §11.3: não há o que recomendar, mas isso não é falha operacional.
+            # O estado sai vazio e honesto, e o Briefing monta a variante de
+            # evidência insuficiente. O provedor não é chamado: os rascunhos
+            # seriam todos descartados.
+            return self._sem_recomendacao(
                 "nenhum gap está sustentado por evidência confirmada neste "
                 "perfil: as dimensões estruturais estão desconhecidas ou com "
                 "capacidade confirmada e não há dor documentada. O provedor de "
-                "recomendação não foi chamado e nada foi gravado no estado."
+                "recomendação não foi chamado."
             )
 
         trechos = {trecho.id_chunk: trecho for trecho in contexto.trechos}
@@ -146,6 +150,9 @@ class Recommendation:
         # não serializa; a forma JSON do mesmo contrato atravessa o checkpoint
         # sem alterar o modelo. ``FitScore`` não tem URL e vai como instância,
         # como os demais artefatos do estado.
+        if not recomendacoes:
+            saida = self._sem_recomendacao(*descartes)
+            return saida
         saida: dict[str, Any] = {
             "recomendacoes": [
                 recomendacao.model_dump(mode="json")
@@ -157,6 +164,24 @@ class Recommendation:
         # ``erros`` é canal acumulado: recebe só o que este nó produziu.
         if descartes:
             saida["erros"] = descartes
+        return saida
+
+    @staticmethod
+    def _sem_recomendacao(*motivos: str) -> dict[str, Any]:
+        """Saída honesta quando nenhuma recomendação com lastro pôde existir.
+
+        ``fit_score`` fica nulo de propósito: publicar uma pontuação sem o
+        pacote de recomendações que ela resume seria oferecer conclusão sem o
+        conteúdo que a sustenta. O Briefing lê este estado e monta a variante
+        de evidência insuficiente (§11.3).
+        """
+        saida: dict[str, Any] = {
+            "recomendacoes": [],
+            "fit_score": None,
+            "trajeto": ["recommendation"],
+        }
+        if motivos:
+            saida["erros"] = list(motivos)
         return saida
 
     # ------------------------------------------------------------------
@@ -305,10 +330,15 @@ class Recommendation:
             # menos recomendações com proveniência verificável é melhor que uma
             # sem lastro.
             if not validas:
-                raise ErroRecommendation(
-                    "nenhuma recomendação sobreviveu à conferência de "
-                    f"proveniência; nada foi gravado no estado: {' | '.join(falhas)}"
-                )
+                # §11.3: melhor nenhuma recomendação do que uma sem lastro. A
+                # análise segue para o Briefing terminal com os motivos do
+                # descarte preservados em ``erros``.
+                return [], [
+                    (
+                        "nenhuma recomendação sobreviveu à conferência de "
+                        f"proveniência: {' | '.join(falhas)}"
+                    )
+                ]
             return self._relatorio(validas), falhas
         raise AssertionError("laço de rascunhos terminou em estado impossível")
 

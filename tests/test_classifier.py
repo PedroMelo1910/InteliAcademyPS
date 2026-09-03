@@ -631,6 +631,7 @@ def test_classificar_invalida_o_estado_derivado_da_classificacao_anterior():
         "contexto_nvidia",
         "recomendacoes",
         "fit_score",
+        "briefing",
     )
     saida = Classifier(ProvedorSequencial(classificacao()))(estado(perfil_ai_native()))
     for campo in CAMPOS_DERIVADOS_DA_CLASSIFICACAO:
