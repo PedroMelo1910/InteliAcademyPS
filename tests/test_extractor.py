@@ -346,6 +346,8 @@ def test_prompt_identifica_a_startup_o_foco_e_proibe_ausencia_inferida(controlad
     assert "12 a 300 caracteres" in prompt
     assert "ao menos 3 palavras" in prompt
     assert "literal" in prompt
+    assert "ao menos uma afirmação positiva sobre essa oferta" in prompt
+    assert "não invente uma afirmação de produto" in prompt
 
 
 def test_o_extractor_nao_expoe_classe_referencia(controlada):

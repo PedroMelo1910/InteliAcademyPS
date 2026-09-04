@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from radar.configuracao import TETO_DOCUMENTOS_DESCOBERTA
 from radar.contratos import (
+    AnalisePersistida,
+    CoberturaAnalises,
     DocumentoIntegral,
     FonteBriefing,
     DocumentoRecuperado,
@@ -24,7 +27,36 @@ from radar.contratos import (
 )
 
 
-SCHEMA_SQL = """
+LOGGER = logging.getLogger(__name__)
+
+SCHEMA_ANALISES_SQL = """
+CREATE TABLE IF NOT EXISTS analises (
+    startup_id INTEGER PRIMARY KEY REFERENCES startups(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('concluida', 'evidencia_insuficiente')),
+    classe TEXT CHECK (classe IN ('AI-native', 'AI-enabled', 'non-AI')),
+    fit_score_total INTEGER CHECK (fit_score_total BETWEEN 0 AND 100),
+    fit_score_json TEXT,
+    perfil_validado_json TEXT NOT NULL,
+    motivo_evidencia_insuficiente TEXT,
+    data_execucao TEXT NOT NULL,
+    versao_rubrica TEXT NOT NULL,
+    CHECK (
+        (status = 'concluida' AND classe IS NOT NULL
+            AND fit_score_total IS NOT NULL AND fit_score_json IS NOT NULL
+            AND motivo_evidencia_insuficiente IS NULL)
+        OR
+        (status = 'evidencia_insuficiente' AND classe IS NULL
+            AND fit_score_total IS NULL AND fit_score_json IS NULL
+            AND motivo_evidencia_insuficiente IS NOT NULL
+            AND LENGTH(TRIM(motivo_evidencia_insuficiente)) > 0)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_analises_status_classe ON analises(status, classe);
+"""
+
+
+SCHEMA_SQL = f"""
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS startups (
@@ -55,31 +87,13 @@ CREATE TABLE IF NOT EXISTS documentos (
     data_acesso TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS analises (
-    startup_id INTEGER PRIMARY KEY REFERENCES startups(id) ON DELETE CASCADE,
-    status TEXT NOT NULL CHECK (status IN ('concluida', 'evidencia_insuficiente')),
-    classe TEXT CHECK (classe IN ('AI-native', 'AI-enabled', 'non-AI')),
-    fit_score_total INTEGER CHECK (fit_score_total BETWEEN 0 AND 100),
-    fit_score_json TEXT,
-    perfil_validado_json TEXT NOT NULL,
-    data_execucao TEXT NOT NULL,
-    versao_rubrica TEXT NOT NULL,
-    CHECK (
-        (status = 'concluida' AND classe IS NOT NULL
-            AND fit_score_total IS NOT NULL AND fit_score_json IS NOT NULL)
-        OR
-        (status = 'evidencia_insuficiente' AND classe IS NULL
-            AND fit_score_total IS NULL AND fit_score_json IS NULL)
-    )
-);
+{SCHEMA_ANALISES_SQL}
 
 CREATE INDEX IF NOT EXISTS idx_startups_setor ON startups(setor);
 CREATE INDEX IF NOT EXISTS idx_startups_estagio ON startups(estagio);
 CREATE INDEX IF NOT EXISTS idx_startups_localizacao ON startups(localizacao);
 CREATE INDEX IF NOT EXISTS idx_startups_tamanho_time ON startups(tamanho_time);
 CREATE INDEX IF NOT EXISTS idx_documentos_startup ON documentos(startup_id);
-CREATE INDEX IF NOT EXISTS idx_analises_status_classe ON analises(status, classe);
-
 CREATE VIRTUAL TABLE IF NOT EXISTS documentos_fts USING fts5(
     titulo,
     conteudo_texto,
@@ -107,6 +121,93 @@ def conectar(caminho_banco: Path) -> sqlite3.Connection:
     return conexao
 
 
+def _reidratar_analise(linha: sqlite3.Row) -> AnalisePersistida | None:
+    """Revalida uma linha do cache; devolve ``None`` e avisa quando ela não presta.
+
+    Esta é a única regra de reidratação do cache. Leitura e cobertura precisam
+    enxergar exatamente o mesmo conjunto de análises servíveis: duas regras
+    diferentes fariam o relatório do operador divergir do que a interface mostra.
+    """
+    try:
+        analise = AnalisePersistida(
+            startup_id=linha["startup_id"],
+            status=linha["status"],
+            classe=linha["classe"],
+            fit_score=(
+                json.loads(linha["fit_score_json"])
+                if linha["fit_score_json"] is not None
+                else None
+            ),
+            perfil_validado=json.loads(linha["perfil_validado_json"]),
+            motivo_evidencia_insuficiente=linha["motivo_evidencia_insuficiente"],
+            data_execucao=linha["data_execucao"],
+            versao_rubrica=linha["versao_rubrica"],
+        )
+        total_json = analise.fit_score.total if analise.fit_score else None
+        if total_json != linha["fit_score_total"]:
+            raise ValueError("fit_score_total diverge do FitScore serializado")
+    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as erro:
+        LOGGER.warning(
+            "análise inválida ignorada para startup_id=%s: %s",
+            linha["startup_id"],
+            erro,
+        )
+        return None
+    return analise
+
+
+def _contar_linhas_analises(conexao: sqlite3.Connection) -> int | None:
+    """Conta o cache legado; ``None`` quando a tabela não é legível com segurança."""
+    try:
+        return conexao.execute("SELECT COUNT(*) FROM analises").fetchone()[0]
+    except sqlite3.DatabaseError:
+        return None
+
+
+def _preparar_cache_analises(conexao: sqlite3.Connection) -> None:
+    """Recria somente o cache legado quando suas garantias ficaram obsoletas."""
+    tabelas = {
+        linha["name"]
+        for linha in conexao.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+    if not {"startups", "documentos"}.issubset(tabelas):
+        raise ValueError(
+            "o banco não está inicializado; execute python -m scripts.inicializar_base"
+        )
+    definicao = conexao.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        ("analises",),
+    ).fetchone()
+    if definicao is not None:
+        if "motivo_evidencia_insuficiente IS NOT NULL" in (definicao["sql"] or ""):
+            return
+        # Antes deste marco não havia escritor para a tabela. Como ela é cache
+        # regenerável por definição, recriá-la é mais seguro do que transportar
+        # linhas sem o motivo obrigatório para um contrato novo. O descarte é
+        # barulhento de propósito: apagar análises em silêncio deixaria o
+        # operador sem saber por que a cobertura voltou a zero.
+        descartadas = _contar_linhas_analises(conexao)
+        LOGGER.warning(
+            "cache legado de análises será recriado: a tabela `analises` não "
+            "atende ao contrato atual e %s. O cache é regenerável — reexecute "
+            "python -m scripts.analisar_lote --executar para repopulá-lo.",
+            f"{descartadas} linha(s) serão descartadas"
+            if descartadas is not None
+            else "as linhas existentes serão descartadas",
+        )
+        conexao.execute("DROP TABLE analises")
+    # Tabela ausente é banco novo, não cache legado: cria em silêncio.
+    conexao.executescript(SCHEMA_ANALISES_SQL)
+
+
+def preparar_cache_analises(caminho_banco: Path) -> None:
+    """Prepara o schema do cache uma vez, fora dos caminhos de leitura."""
+    with conectar(caminho_banco) as conexao:
+        _preparar_cache_analises(conexao)
+
+
 def carregar_curadoria(diretorio: Path) -> list[StartupCurada]:
     arquivos = sorted(diretorio.glob("*.json"))
     if not arquivos:
@@ -127,6 +228,7 @@ def inicializar_banco(caminho_banco: Path, diretorio_curadoria: Path) -> None:
     caminho_banco.parent.mkdir(parents=True, exist_ok=True)
     with conectar(caminho_banco) as conexao:
         conexao.executescript(SCHEMA_SQL)
+        _preparar_cache_analises(conexao)
         for startup in startups:
             conexao.execute(
                 """
@@ -287,6 +389,180 @@ class BaseStartups:
             ).fetchall()
             resultado["classe_analisada"] = [linha["valor"] for linha in classes]
             return resultado
+
+    def listar_startups_para_lote(self) -> list[EmpresaCandidata]:
+        """Lista a projeção de execução sem ler o gabarito de avaliação."""
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT id AS id_startup, nome, setor, estagio, localizacao,
+                       descricao_curta
+                FROM startups
+                ORDER BY id
+                """
+            ).fetchall()
+        return [EmpresaCandidata.model_validate(dict(linha)) for linha in linhas]
+
+    def recuperar_para_lote(self, startup_id: int) -> ResultadoRecuperacao:
+        """Carrega uma startup e todos os seus documentos sem Query Planner.
+
+        O score lexical zero é apenas um valor neutro dentro desta recuperação
+        técnica; ele não entra no fit-score nem no ranking de descoberta.
+        """
+        with conectar(self.caminho_banco) as conexao:
+            empresa = conexao.execute(
+                """
+                SELECT id AS id_startup, nome, setor, estagio, localizacao,
+                       descricao_curta
+                FROM startups WHERE id = ?
+                """,
+                (startup_id,),
+            ).fetchone()
+            if empresa is None:
+                return ResultadoRecuperacao(
+                    empresas=[],
+                    documentos=[],
+                    filtros_aplicados=FiltrosEstruturados(),
+                )
+            documentos = conexao.execute(
+                """
+                SELECT id AS id_documento, startup_id AS id_startup, tipo, titulo,
+                       url_fonte, dominio_fonte, data_acesso
+                FROM documentos
+                WHERE startup_id = ?
+                ORDER BY id
+                """,
+                (startup_id,),
+            ).fetchall()
+        return ResultadoRecuperacao(
+            empresas=[EmpresaCandidata.model_validate(dict(empresa))],
+            documentos=[
+                DocumentoRecuperado(**dict(documento), score_bm25=0.0)
+                for documento in documentos
+            ],
+            filtros_aplicados=FiltrosEstruturados(),
+        )
+
+    def salvar_analise(self, analise: AnalisePersistida | object) -> None:
+        """Insere ou substitui uma análise inteira numa única transação."""
+        validada = AnalisePersistida.model_validate(analise)
+        perfil_json = json.dumps(
+            validada.perfil_validado.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        fit_json = (
+            json.dumps(
+                validada.fit_score.model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if validada.fit_score is not None
+            else None
+        )
+        with conectar(self.caminho_banco) as conexao:
+            conexao.execute(
+                """
+                INSERT INTO analises (
+                    startup_id, status, classe, fit_score_total, fit_score_json,
+                    perfil_validado_json, motivo_evidencia_insuficiente,
+                    data_execucao, versao_rubrica
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(startup_id) DO UPDATE SET
+                    status = excluded.status,
+                    classe = excluded.classe,
+                    fit_score_total = excluded.fit_score_total,
+                    fit_score_json = excluded.fit_score_json,
+                    perfil_validado_json = excluded.perfil_validado_json,
+                    motivo_evidencia_insuficiente =
+                        excluded.motivo_evidencia_insuficiente,
+                    data_execucao = excluded.data_execucao,
+                    versao_rubrica = excluded.versao_rubrica
+                """,
+                (
+                    validada.startup_id,
+                    validada.status,
+                    validada.classe,
+                    validada.fit_score.total if validada.fit_score else None,
+                    fit_json,
+                    perfil_json,
+                    validada.motivo_evidencia_insuficiente,
+                    validada.data_execucao.isoformat(),
+                    validada.versao_rubrica,
+                ),
+            )
+
+    def carregar_analises(
+        self, ids_startups: Sequence[object]
+    ) -> dict[int, AnalisePersistida]:
+        """Reidrata e valida apenas as análises das candidatas solicitadas."""
+        ids = list(dict.fromkeys(ids_startups))
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT startup_id, status, classe, fit_score_total, fit_score_json,
+                       perfil_validado_json, motivo_evidencia_insuficiente,
+                       data_execucao, versao_rubrica
+                FROM analises
+                WHERE startup_id IN ({marcadores})
+                """,
+                tuple(ids),
+            ).fetchall()
+        resultado: dict[int, AnalisePersistida] = {}
+        for linha in linhas:
+            analise = _reidratar_analise(linha)
+            if analise is not None:
+                resultado[analise.startup_id] = analise
+        return resultado
+
+    def cobertura_analises(self) -> CoberturaAnalises:
+        """Mede a cobertura efetivamente servível, com a regra da leitura.
+
+        Contar por SQL puro diria ao operador que uma startup está analisada
+        enquanto ``carregar_analises`` a descarta por corrupção — o relatório
+        prometeria uma cobertura que o ranking não entrega. Uma linha que não
+        sobrevive à reidratação é indistinguível de uma análise que nunca
+        existiu para quem consome o ranking, então ela conta como ausente,
+        nunca como concluída ou insuficiente.
+        """
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                """
+                SELECT a.startup_id, a.status, a.classe, a.fit_score_total,
+                       a.fit_score_json, a.perfil_validado_json,
+                       a.motivo_evidencia_insuficiente, a.data_execucao,
+                       a.versao_rubrica
+                FROM startups s
+                LEFT JOIN analises a ON a.startup_id = s.id
+                ORDER BY s.id
+                """
+            ).fetchall()
+        concluidas = 0
+        insuficientes = 0
+        ausentes = 0
+        for linha in linhas:
+            analise = (
+                _reidratar_analise(linha) if linha["startup_id"] is not None else None
+            )
+            if analise is None:
+                ausentes += 1
+            elif analise.status == "concluida":
+                concluidas += 1
+            else:
+                insuficientes += 1
+        # Cada startup curada incrementa exatamente um contador, então as
+        # parcelas fecham o total por construção, não por coincidência.
+        return CoberturaAnalises(
+            total_startups=len(linhas),
+            concluidas=concluidas,
+            evidencias_insuficientes=insuficientes,
+            ausentes=ausentes,
+        )
 
     def carregar_documentos(
         self, id_startup: int, ids_documentos: Sequence[int]
@@ -540,4 +816,3 @@ class BaseStartups:
             documentos=documentos,
             filtros_aplicados=filtros,
         )
-

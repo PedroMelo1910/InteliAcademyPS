@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from uuid import uuid4
@@ -19,13 +19,16 @@ from radar.configuracao import (
     RAIZ_PROJETO,
 )
 from radar.contratos import (
+    AnalisePersistida,
     Briefing,
+    ClasseStartup,
     DocumentoRecuperado,
     EmpresaCandidata,
     EstadoRadar,
     PlanoConsulta,
     ResultadoR1,
     ResultadoRecuperacao,
+    StatusAnaliseRanking,
 )
 from radar.grafo import montar_grafo
 from radar.provedores import (
@@ -53,6 +56,11 @@ class ItemRanking:
     empresa: EmpresaCandidata
     melhor_score_bm25: float
     documentos: tuple[DocumentoRecuperado, ...]
+    status_analise: StatusAnaliseRanking
+    classe: ClasseStartup | None
+    fit_score_total: int | None
+    justificativa_fit_score: str | None
+    motivo_evidencia_insuficiente: str | None
 
 
 @dataclass(frozen=True)
@@ -67,23 +75,58 @@ class SaidaDescoberta:
     trajeto: tuple[str, ...]
 
 
-def construir_ranking(resultado: ResultadoRecuperacao) -> tuple[ItemRanking, ...]:
+def construir_ranking(
+    resultado: ResultadoRecuperacao,
+    analises: Mapping[int, AnalisePersistida] | None = None,
+) -> tuple[ItemRanking, ...]:
+    """Cruza relevância lexical com o cache, sem misturar as duas medidas."""
+    analises = analises or {}
     documentos_por_empresa: dict[int, list[DocumentoRecuperado]] = {}
     for documento in resultado.documentos:
         documentos_por_empresa.setdefault(documento.id_startup, []).append(documento)
-    ordenadas = sorted(
-        resultado.empresas,
-        key=lambda empresa: min(
+    def melhor_bm25(empresa: EmpresaCandidata) -> float:
+        return min(
             (
                 documento.score_bm25
                 for documento in documentos_por_empresa.get(empresa.id_startup, [])
             ),
             default=float("inf"),
-        ),
-    )
+        )
+
+    def chave(empresa: EmpresaCandidata):
+        analise = analises.get(empresa.id_startup)
+        if analise is None:
+            grupo, total = 1, 0
+        elif analise.status == "evidencia_insuficiente":
+            grupo, total = 1, 0
+        else:
+            if analise.fit_score is None:
+                # `assert` sumiria sob python -O e o ranking cairia num
+                # AttributeError obscuro. Uma concluída sem FitScore é um
+                # cache corrompido: falhar alto é melhor do que rebaixá-la em
+                # silêncio ou arbitrar uma pontuação que ninguém calculou.
+                raise ErroAplicacao(
+                    "análise concluída sem FitScore para a startup "
+                    f"{empresa.id_startup}: o ranking não inventa pontuação"
+                )
+            grupo = 0
+            total = analise.fit_score.total
+        return (
+            grupo,
+            -total,
+            melhor_bm25(empresa),
+            empresa.nome.casefold(),
+            empresa.id_startup,
+        )
+
+    ordenadas = sorted(resultado.empresas, key=chave)
     itens: list[ItemRanking] = []
     for posicao, empresa in enumerate(ordenadas, start=1):
         documentos = tuple(documentos_por_empresa.get(empresa.id_startup, []))
+        analise = analises.get(empresa.id_startup)
+        status: StatusAnaliseRanking = (
+            analise.status if analise is not None else "ausente"
+        )
         itens.append(
             ItemRanking(
                 posicao=posicao,
@@ -93,6 +136,23 @@ def construir_ranking(resultado: ResultadoRecuperacao) -> tuple[ItemRanking, ...
                     default=0.0,
                 ),
                 documentos=documentos,
+                status_analise=status,
+                classe=analise.classe if analise is not None else None,
+                fit_score_total=(
+                    analise.fit_score.total
+                    if analise is not None and analise.fit_score is not None
+                    else None
+                ),
+                justificativa_fit_score=(
+                    analise.fit_score.justificativa_curta
+                    if analise is not None and analise.fit_score is not None
+                    else None
+                ),
+                motivo_evidencia_insuficiente=(
+                    analise.motivo_evidencia_insuficiente
+                    if analise is not None
+                    else None
+                ),
             )
         )
     return tuple(itens)
@@ -114,9 +174,10 @@ class ErroAplicacao(RuntimeError):
 
 
 class AplicacaoRadar:
-    def __init__(self, grafo, conexao_checkpoints):
+    def __init__(self, grafo, conexao_checkpoints, base: BaseStartups):
         self.grafo = grafo
         self._conexao_checkpoints = conexao_checkpoints
+        self.base = base
 
     def executar_descoberta(self, consulta: str) -> SaidaDescoberta:
         estado_inicial: EstadoRadar = {
@@ -137,12 +198,15 @@ class AplicacaoRadar:
         )
         plano = PlanoConsulta.model_validate(estado_final["plano_consulta"])
         rota = rotear_r1(estado_final)
+        analises = self.base.carregar_analises(
+            [empresa.id_startup for empresa in resultado.empresas]
+        )
         return SaidaDescoberta(
             consulta=consulta,
             rota=rota,
             plano=plano,
             resultado=resultado,
-            ranking=construir_ranking(resultado),
+            ranking=construir_ranking(resultado, analises),
             tentativas_relaxamento=int(estado_final.get("tentativas_relaxamento", 0)),
             criterios_relaxados=tuple(estado_final.get("criterios_relaxados", [])),
             trajeto=tuple(estado_final.get("trajeto", [])),
@@ -263,8 +327,9 @@ def criar_aplicacao(
         and provedor_recomendacao is not None
         and provedor_briefing is not None
     )
+    base = BaseStartups(caminho_banco)
     grafo, conexao = montar_grafo(
-        BaseStartups(caminho_banco),
+        base,
         provedor,
         provedor_extracao,
         provedor_classificacao,
@@ -274,4 +339,4 @@ def criar_aplicacao(
         provedor_briefing,
         relogio,
     )
-    return AplicacaoRadar(grafo, conexao)
+    return AplicacaoRadar(grafo, conexao, base)

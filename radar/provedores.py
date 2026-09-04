@@ -3,9 +3,10 @@ from __future__ import annotations
 import math
 import re
 import socket
-from typing import Protocol
+from typing import Any, Protocol
 
 from langchain_core.documents import Document
+from langchain_core.rate_limiters import BaseRateLimiter
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, NVIDIARerank
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -25,6 +26,78 @@ from radar.contratos import (
 )
 
 
+# O Flash-Lite rejeita parte das restricoes declaradas como JSON Schema mesmo
+# quando elas pertencem ao subconjunto documentado pelo endpoint. Enviamos ao
+# modelo apenas a forma estrutural; enums e limites continuam obrigatorios nos
+# contratos Pydantic e sao conferidos na fronteira, inclusive no retry unico.
+_CHAVES_JSON_SCHEMA_GEMINI = frozenset(
+    {
+        "type",
+        "enum",
+        "items",
+        "prefixItems",
+        "anyOf",
+        "oneOf",
+        "properties",
+        "required",
+    }
+)
+
+
+def _schema_json_compativel_gemini(contrato: type[BaseModel]) -> dict[str, Any]:
+    """Remove palavras-chave que o Gemini rejeita em ``responseJsonSchema``."""
+
+    original = contrato.model_json_schema()
+    definicoes = original.get("$defs", {})
+
+    def limpar(
+        schema: dict[str, Any], referencias_em_curso: frozenset[str] = frozenset()
+    ) -> dict[str, Any]:
+        referencia = schema.get("$ref")
+        if isinstance(referencia, str):
+            nome = referencia.rsplit("/", maxsplit=1)[-1]
+            if nome in referencias_em_curso or nome not in definicoes:
+                raise ValueError(f"referencia JSON Schema nao suportada: {referencia}")
+            combinado = dict(definicoes[nome])
+            combinado.update(
+                {chave: valor for chave, valor in schema.items() if chave != "$ref"}
+            )
+            return limpar(combinado, referencias_em_curso | {nome})
+
+        resultado: dict[str, Any] = {}
+        for chave, valor in schema.items():
+            if chave == "$defs":
+                continue
+            elif chave not in _CHAVES_JSON_SCHEMA_GEMINI:
+                continue
+            elif chave == "properties":
+                resultado[chave] = {
+                    nome: limpar(subschema, referencias_em_curso)
+                    for nome, subschema in valor.items()
+                }
+            elif chave == "items" and isinstance(valor, dict):
+                resultado[chave] = limpar(valor, referencias_em_curso)
+            elif chave in {"anyOf", "oneOf", "prefixItems"}:
+                resultado[chave] = [
+                    limpar(subschema, referencias_em_curso) for subschema in valor
+                ]
+            else:
+                resultado[chave] = valor
+        return resultado
+
+    return limpar(original)
+
+
+def _com_saida_estruturada_gemini(
+    modelo: ChatGoogleGenerativeAI, contrato: type[BaseModel]
+) -> object:
+    """Configura JSON nativo sem enfraquecer a validacao Pydantic posterior."""
+
+    return modelo.with_structured_output(
+        _schema_json_compativel_gemini(contrato), method="json_schema"
+    )
+
+
 class ProvedorPlanoConsulta(Protocol):
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         """Produz uma resposta estruturada ainda sujeita à validação da fronteira."""
@@ -41,9 +114,7 @@ class ProvedorGeminiPlanoConsulta:
             retries=1,
             request_timeout=30,
         )
-        self._estruturado = modelo.with_structured_output(
-            PlanoConsulta, method="json_schema"
-        )
+        self._estruturado = _com_saida_estruturada_gemini(modelo, PlanoConsulta)
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         return self._estruturado.invoke(mensagens)
@@ -57,17 +128,21 @@ class ProvedorPerfilExtraido(Protocol):
 class ProvedorGeminiPerfilExtraido:
     """Adaptador de structured output do Extractor; o nó não conhece a rede."""
 
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        limitador: BaseRateLimiter | None = None,
+    ):
         modelo = ChatGoogleGenerativeAI(
             model=MODELO_GEMINI,
             api_key=api_key,
             temperature=None,
             retries=1,
             request_timeout=60,
+            rate_limiter=limitador,
         )
-        self._estruturado = modelo.with_structured_output(
-            PerfilExtraido, method="json_schema"
-        )
+        self._estruturado = _com_saida_estruturada_gemini(modelo, PerfilExtraido)
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         return self._estruturado.invoke(mensagens)
@@ -81,17 +156,21 @@ class ProvedorClassificacao(Protocol):
 class ProvedorGeminiClassificacao:
     """Adaptador de structured output do Classifier; o nó não conhece a rede."""
 
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        limitador: BaseRateLimiter | None = None,
+    ):
         modelo = ChatGoogleGenerativeAI(
             model=MODELO_GEMINI,
             api_key=api_key,
             temperature=None,
             retries=1,
             request_timeout=60,
+            rate_limiter=limitador,
         )
-        self._estruturado = modelo.with_structured_output(
-            Classificacao, method="json_schema"
-        )
+        self._estruturado = _com_saida_estruturada_gemini(modelo, Classificacao)
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         return self._estruturado.invoke(mensagens)
@@ -127,8 +206,8 @@ class ProvedorGeminiRecomendacaoRascunho:
             retries=1,
             request_timeout=60,
         )
-        self._estruturado = modelo.with_structured_output(
-            RascunhosRecomendacao, method="json_schema"
+        self._estruturado = _com_saida_estruturada_gemini(
+            modelo, RascunhosRecomendacao
         )
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
@@ -156,9 +235,7 @@ class ProvedorGeminiBriefingRascunho:
             retries=1,
             request_timeout=60,
         )
-        self._estruturado = modelo.with_structured_output(
-            BriefingRascunho, method="json_schema"
-        )
+        self._estruturado = _com_saida_estruturada_gemini(modelo, BriefingRascunho)
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         return self._estruturado.invoke(mensagens)
@@ -211,7 +288,7 @@ _NOMES_FALHA_OPERACIONAL = (
 )
 
 
-def _falha_operacional(excecao: Exception) -> bool:
+def falha_operacional(excecao: Exception) -> bool:
     """Classifica indisponibilidade sem depender apenas da mensagem humana."""
     atual: BaseException | None = excecao
     vistos: set[int] = set()
@@ -315,7 +392,7 @@ class ProvedorEmbeddingNvidia:
             except Exception as excecao:
                 raise ErroProvedorEmbedding(
                     f"falha ao inicializar o provedor de embedding: {excecao}",
-                    operacional=_falha_operacional(excecao),
+                    operacional=falha_operacional(excecao),
                 ) from excecao
         self._cliente = cliente
         self._dimensao = dimensao
@@ -354,7 +431,7 @@ class ProvedorEmbeddingNvidia:
         except Exception as excecao:
             raise ErroProvedorEmbedding(
                 f"falha do provedor de embedding em modo passage: {excecao}",
-                operacional=_falha_operacional(excecao),
+                operacional=falha_operacional(excecao),
             ) from excecao
         return self._validar(vetores, len(textos))
 
@@ -364,7 +441,7 @@ class ProvedorEmbeddingNvidia:
         except Exception as excecao:
             raise ErroProvedorEmbedding(
                 f"falha do provedor de embedding em modo query: {excecao}",
-                operacional=_falha_operacional(excecao),
+                operacional=falha_operacional(excecao),
             ) from excecao
         return self._validar([vetor], 1)[0]
 
@@ -387,7 +464,7 @@ class ProvedorRerankNvidia:
             except Exception as excecao:
                 raise ErroProvedorRerank(
                     f"falha ao inicializar o reranker NVIDIA: {excecao}",
-                    operacional=_falha_operacional(excecao),
+                    operacional=falha_operacional(excecao),
                 ) from excecao
         self._cliente = cliente
 
@@ -402,7 +479,7 @@ class ProvedorRerankNvidia:
         except Exception as excecao:
             raise ErroProvedorRerank(
                 f"falha do reranker NVIDIA: {excecao}",
-                operacional=_falha_operacional(excecao),
+                operacional=falha_operacional(excecao),
             ) from excecao
         scores: dict[int, float] = {}
         try:
@@ -460,7 +537,7 @@ class ProvedorRerankListwiseGemini:
                 retries=1,
                 request_timeout=30,
             )
-            cliente = base.with_structured_output(OrdenacaoListwise, method="json_schema")
+            cliente = _com_saida_estruturada_gemini(base, OrdenacaoListwise)
         self._cliente = cliente
 
     @staticmethod
@@ -502,7 +579,7 @@ class ProvedorRerankListwiseGemini:
             except Exception as excecao:
                 raise ErroProvedorRerank(
                     f"falha do fallback listwise: {excecao}",
-                    operacional=_falha_operacional(excecao),
+                    operacional=falha_operacional(excecao),
                 ) from excecao
             try:
                 ordem = list(OrdenacaoListwise.model_validate(bruto).ordem)

@@ -101,3 +101,44 @@ def montar_grafo(
     # convergem aqui, e daqui o grafo termina.
     construtor.add_edge("briefing", END)
     return construtor.compile(checkpointer=checkpointer), conexao_checkpoints
+
+
+def montar_grafo_lote(
+    base: BaseStartups,
+    provedor_extracao: ProvedorPerfilExtraido,
+    provedor_classificacao: ProvedorClassificacao,
+    caminho_checkpoints: Path,
+):
+    """Monta o subgrafo de pré-análise sem agentes de consulta ou recomendação.
+
+    Cada invocação recebe uma única startup já carregada pela fronteira SQLite.
+    R2 pode repetir o mesmo trio de nós uma vez; os três resultados de R3
+    terminam para que o runner persista somente o artefato validado.
+    """
+    caminho_checkpoints.parent.mkdir(parents=True, exist_ok=True)
+    conexao_checkpoints = sqlite3.connect(caminho_checkpoints, check_same_thread=False)
+    checkpointer = SqliteSaver(conexao_checkpoints)
+
+    construtor = StateGraph(EstadoRadar)
+    construtor.add_node("extractor", Extractor(base, provedor_extracao))
+    construtor.add_node("classifier", Classifier(provedor_classificacao))
+    construtor.add_node("evidence_validator", EvidenceValidator(base))
+    construtor.add_node("r3", _passagem_para_r3)
+    construtor.add_edge(START, "extractor")
+    construtor.add_edge("extractor", "classifier")
+    construtor.add_edge("classifier", "evidence_validator")
+    construtor.add_conditional_edges(
+        "evidence_validator",
+        rotear_r2,
+        {"reextrair": "extractor", "evidencia_pronta": "r3"},
+    )
+    construtor.add_conditional_edges(
+        "r3",
+        rotear_r3,
+        {
+            "evidencia_insuficiente": END,
+            "nao_aderente": END,
+            "prosseguir": END,
+        },
+    )
+    return construtor.compile(checkpointer=checkpointer), conexao_checkpoints

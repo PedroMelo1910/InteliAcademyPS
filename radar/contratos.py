@@ -22,6 +22,8 @@ TipoDocumento = Literal[
 ResultadoR1 = Literal["analisar", "candidatas_prontas", "relaxar", "sem_resultado"]
 ResultadoR2 = Literal["reextrair", "evidencia_pronta"]
 ResultadoR3 = Literal["evidencia_insuficiente", "nao_aderente", "prosseguir"]
+StatusAnalise = Literal["concluida", "evidencia_insuficiente"]
+StatusAnaliseRanking = Literal["concluida", "evidencia_insuficiente", "ausente"]
 
 CategoriaAfirmacao = Literal[
     "dados_proprietarios",
@@ -996,6 +998,103 @@ class FitScore(BaseModel):
                 raise ValueError(
                     f"total {self.total} não corresponde à normalização {esperado}"
                 )
+        return self
+
+
+class AnalisePersistida(BaseModel):
+    """Resultado regenerável do grafo de lote, validado antes de tocar o SQLite."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    startup_id: int = Field(ge=1)
+    status: StatusAnalise
+    classe: ClasseStartup | None = None
+    fit_score: FitScore | None = None
+    perfil_validado: PerfilValidado
+    motivo_evidencia_insuficiente: str | None = Field(
+        default=None, min_length=1, max_length=500
+    )
+    data_execucao: date
+    versao_rubrica: Literal["rubrica-v1"]
+
+    @model_validator(mode="after")
+    def campos_correspondem_ao_status(self) -> AnalisePersistida:
+        if self.status == "concluida":
+            if self.classe is None or self.fit_score is None:
+                raise ValueError(
+                    "análise concluída exige classe e FitScore completos"
+                )
+            if self.motivo_evidencia_insuficiente is not None:
+                raise ValueError(
+                    "análise concluída não pode carregar motivo de insuficiência"
+                )
+            if self.fit_score.versao_rubrica != self.versao_rubrica:
+                raise ValueError(
+                    "FitScore e análise precisam usar a mesma versão da rubrica"
+                )
+            if (
+                self.fit_score.estado_dimensoes_gap
+                != self.perfil_validado.estado_dimensoes_gap
+            ):
+                raise ValueError(
+                    "FitScore precisa preservar os estados de gap do perfil validado"
+                )
+            ids_confirmados = {
+                item.id_afirmacao
+                for item in self.perfil_validado.afirmacoes_validadas
+                if item.situacao == "confirmada"
+            }
+            ids_do_score = {
+                id_afirmacao
+                for pilar in self.fit_score.pilares
+                for id_afirmacao in pilar.ids_evidencias
+            }
+            if not ids_do_score.issubset(ids_confirmados):
+                raise ValueError(
+                    "FitScore só pode referenciar afirmações confirmadas do perfil"
+                )
+            gate_non_ai = all(
+                "gate_non_ai" in pilar.travas_aplicadas
+                for pilar in self.fit_score.pilares
+            )
+            if self.classe == "non-AI" and (
+                self.fit_score.total != 0 or not gate_non_ai
+            ):
+                raise ValueError(
+                    "classe non-AI exige FitScore zero com gate_non_ai nos pilares"
+                )
+            if self.classe != "non-AI" and gate_non_ai:
+                raise ValueError("gate_non_ai só pode acompanhar a classe non-AI")
+            return self
+
+        if self.classe is not None or self.fit_score is not None:
+            raise ValueError(
+                "evidência insuficiente exige classe e FitScore nulos"
+            )
+        if not (self.motivo_evidencia_insuficiente or "").strip():
+            raise ValueError(
+                "evidência insuficiente exige um motivo explícito"
+            )
+        return self
+
+
+class CoberturaAnalises(BaseModel):
+    """Contagem consistente do cache em relação às startups curadas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_startups: int = Field(ge=0)
+    concluidas: int = Field(ge=0)
+    evidencias_insuficientes: int = Field(ge=0)
+    ausentes: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def parcelas_fecham_o_total(self) -> CoberturaAnalises:
+        if (
+            self.concluidas + self.evidencias_insuficientes + self.ausentes
+            != self.total_startups
+        ):
+            raise ValueError("as parcelas de cobertura não fecham o total")
         return self
 
 
