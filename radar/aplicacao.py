@@ -24,7 +24,12 @@ from radar.contratos import (
     ResultadoRecuperacao,
 )
 from radar.grafo import montar_grafo
-from radar.provedores import ProvedorGeminiPlanoConsulta, ProvedorPlanoConsulta
+from radar.provedores import (
+    ProvedorGeminiPerfilExtraido,
+    ProvedorGeminiPlanoConsulta,
+    ProvedorPerfilExtraido,
+    ProvedorPlanoConsulta,
+)
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,7 @@ class AplicacaoRadar:
             "consulta_usuario": consulta,
             "startup_selecionada": None,
             "tentativas_relaxamento": 0,
+            "tentativas_extracao": 0,
             "criterios_relaxados": [],
             "erros": [],
             "trajeto": [],
@@ -115,9 +121,15 @@ def criar_aplicacao(
     provedor: ProvedorPlanoConsulta | None = None,
     caminho_banco=CAMINHO_BANCO,
     caminho_checkpoints=CAMINHO_CHECKPOINTS,
+    provedor_extracao: ProvedorPerfilExtraido | None = None,
 ) -> AplicacaoRadar:
     inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
-    if provedor is None:
+    if (provedor is None) != (provedor_extracao is None):
+        raise ErroConfiguracao(
+            "Para injeção offline, informe juntos os provedores do Query Planner "
+            "e do Extractor."
+        )
+    if provedor is None and provedor_extracao is None:
         load_dotenv(RAIZ_PROJETO / ".env")
         api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         if not api_key:
@@ -126,7 +138,12 @@ def criar_aplicacao(
                 "Adicione a chave e reinicie a aplicação."
             )
         provedor = ProvedorGeminiPlanoConsulta(api_key)
+        provedor_extracao = ProvedorGeminiPerfilExtraido(api_key)
+    assert provedor is not None and provedor_extracao is not None
     grafo, conexao = montar_grafo(
-        BaseStartups(caminho_banco), provedor, caminho_checkpoints
+        BaseStartups(caminho_banco),
+        provedor,
+        provedor_extracao,
+        caminho_checkpoints,
     )
     return AplicacaoRadar(grafo, conexao)

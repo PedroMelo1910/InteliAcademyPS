@@ -1,0 +1,40 @@
+{
+  "nome": "Incognia",
+  "site": "https://www.incognia.com/",
+  "setor": "Prevenção a fraude e identidade digital",
+  "estagio": "série B",
+  "localizacao": "Recife, PE (origem e principal time de tecnologia; sede atual nos EUA)",
+  "descricao_curta": "Plataforma de prevenção a fraude que constrói identidade digital a partir de sinais de dispositivo e de localização, usada para verificar contas e barrar tomada de conta em aplicativos de consumo.",
+  "ano_fundacao": 2020,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-native",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Incognia — Location Identity for fraud prevention",
+      "conteudo_texto": "A página institucional apresenta a Incognia como plataforma de inteligência de risco para prevenção a fraude. Seu produto central, Incognia ID, combina segurança de aplicativo, identidade de dispositivo e inteligência de localização para reconhecer usuários entre dispositivos. A página cita modelos Transformer da Incognia, identificação de navegador assistida por IA, construtor de regras com IA e verificação de localização resistente a adulteração. Os segmentos citados incluem delivery de alimentos, transporte por aplicativo, marketplaces entre pessoas e serviços financeiros.",
+      "url_fonte": "https://www.incognia.com/",
+      "dominio_fonte": "incognia.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Empresa do Recife quer dificultar a vida do fraudador — e acaba de captar R$ 155 milhões para isso",
+      "conteudo_texto": "A reportagem informa que a Incognia captou US$ 31 milhões, equivalentes a cerca de R$ 155 milhões, em rodada liderada pela Bessemer Venture Partners, com participação de FJ Labs, Point72, Prosus, Valor Capital e Unbox Capital. O texto registra que a empresa nasceu em 2020 a partir da In Loco, criada em Recife, e que mantinha times nos Estados Unidos, em Recife e em São Paulo, somando cerca de 130 pessoas na data da publicação. Segundo a matéria, a tecnologia compara a localização de abertura de conta com o endereço cadastrado e identifica padrões de uso do aparelho, atendendo aproximadamente 370 milhões de pessoas em 30 países. A publicação registra que esta foi a segunda rodada da empresa, após US$ 15 milhões em meados de 2022, e que a avaliação passou a US$ 181 milhões.",
+      "url_fonte": "https://exame.com/negocios/empresa-do-recife-quer-dificultar-a-vida-do-fraudador-e-acaba-de-captar-r-155-milhoes-para-isso/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2024-01-31",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Brasileira Incognia capta US$ 31 milhões para crescer nos EUA",
+      "conteudo_texto": "A matéria classifica a captação de US$ 31 milhões como rodada série B e aponta a Bessemer Venture Partners como líder, com FJ Labs, Valor Capital, Prosus e Unbox Capital entre os participantes. O texto identifica André Ferraz como fundador e CEO e registra a origem recifense da empresa, antes chamada In Loco. São citados cerca de 378 milhões de usuários alcançados e aproximadamente 30 empresas na carteira de clientes, com 30% da receita vinda do exterior, sobretudo dos Estados Unidos. A publicação informa avaliação de US$ 181 milhões e destino dos recursos em desenvolvimento de tecnologia, expansão comercial nos EUA e infraestrutura de nuvem.",
+      "url_fonte": "https://neofeed.com.br/startups/brasileira-incognia-capta-us-31-milhoes-para-crescer-nos-eua/",
+      "dominio_fonte": "neofeed.com.br",
+      "data_publicacao": "2024-01-31",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}

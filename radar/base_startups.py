@@ -4,12 +4,13 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from pydantic import TypeAdapter
 
 from radar.configuracao import TETO_DOCUMENTOS_DESCOBERTA
 from radar.contratos import (
+    DocumentoIntegral,
     DocumentoRecuperado,
     EmpresaCandidata,
     FiltrosEstruturados,
@@ -83,6 +84,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documentos_fts USING fts5(
     tokenize='unicode61 remove_diacritics 2'
 );
 """
+
+
+class ErroDocumentosStartup(RuntimeError):
+    """Os ids pedidos não descrevem os documentos daquela startup na base."""
 
 
 @dataclass(frozen=True)
@@ -278,6 +283,43 @@ class BaseStartups:
             ).fetchall()
             resultado["classe_analisada"] = [linha["valor"] for linha in classes]
             return resultado
+
+    def carregar_documentos(
+        self, id_startup: int, ids_documentos: Sequence[int]
+    ) -> list[DocumentoIntegral]:
+        """Lê os documentos completos de uma startup, na ordem pedida.
+
+        Falha alto para id ausente, repetido ou de outra startup: devolver menos
+        documentos do que o solicitado esconderia uma recuperação inconsistente.
+        """
+        ids = list(ids_documentos)
+        if not ids:
+            raise ErroDocumentosStartup("nenhum documento foi informado para a startup")
+        repetidos = sorted({item for item in ids if ids.count(item) > 1}, key=repr)
+        if repetidos:
+            raise ErroDocumentosStartup(f"ids de documento repetidos: {repetidos}")
+
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT id AS id_documento, startup_id AS id_startup,
+                       tipo, titulo, conteudo_texto
+                FROM documentos WHERE id IN ({marcadores})
+                """,
+                tuple(ids),
+            ).fetchall()
+
+        por_id = {linha["id_documento"]: linha for linha in linhas}
+        ausentes = [item for item in ids if item not in por_id]
+        if ausentes:
+            raise ErroDocumentosStartup(f"documentos não existem na base: {ausentes}")
+        invasores = [item for item in ids if por_id[item]["id_startup"] != id_startup]
+        if invasores:
+            raise ErroDocumentosStartup(
+                f"documentos {invasores} pertencem a outra startup, não à {id_startup}"
+            )
+        return [DocumentoIntegral.model_validate(dict(por_id[item])) for item in ids]
 
     def recuperar(
         self, plano: PlanoConsulta, startup_selecionada: int | None = None

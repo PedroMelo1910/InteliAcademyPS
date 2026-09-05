@@ -1,0 +1,40 @@
+{
+  "nome": "Nanox",
+  "site": "https://nanoxtech.com/",
+  "setor": "Nanotecnologia e materiais antimicrobianos",
+  "estagio": "não divulgado",
+  "localizacao": "São Carlos, SP",
+  "descricao_curta": "Empresa de nanotecnologia que desenvolve e fabrica aditivos antimicrobianos à base de prata incorporados a plásticos, têxteis, cerâmicas, metais e embalagens de alimentos.",
+  "ano_fundacao": 2004,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "non-AI",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Quem somos — Nanox",
+      "conteudo_texto": "A página institucional descreve a Nanox como empresa de nanotecnologia antimicrobiana e antiviral fundada em 26 de julho de 2004, com sede em São Carlos (SP) e unidades em Newton, Massachusetts, e Figueira da Foz, Portugal. O texto apresenta um portfólio superior a 50 itens distribuídos em três linhas — pó, masterbatch e líquido — voltadas ao controle microbiológico em metais, vidros, cerâmicas, madeira, têxteis e plásticos. A empresa declara sete patentes, tecnologias registradas na FDA e aprovação da Anvisa para aplicações em contato com alimentos, além de duas unidades fabris no Brasil e laboratórios próprios de síntese química e microbiologia. A página identifica a empresa como spin-off acadêmico da Universidade Federal de São Carlos.",
+      "url_fonte": "https://nanoxtech.com/quem-somos/",
+      "dominio_fonte": "nanoxtech.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Aditivos da Nanox aprovados para contato com alimentos nos EUA",
+      "conteudo_texto": "A reportagem informa que os nanoaditivos NNX-TECH, antimicrobianos à base de prata desenvolvidos pela Nanox, foram homologados pela EPA e pela FDA, dos Estados Unidos, para uso em contato direto com alimentos e suas embalagens. O texto descreve a linha como barreira permanente contra bactérias, fungos e vírus, obtida por processos de fabricação de micropartículas nanotecnológicas. A matéria registra sede em São Carlos (SP) e subsidiária em Massachusetts, além de aprovação prévia da Anvisa conforme a Resolução 326 e pedido submetido à autoridade europeia de segurança alimentar. Segundo a publicação, havia projetos em diferentes fases de aprovação junto a indústrias de alimentos.",
+      "url_fonte": "https://plasticosemrevista.com.br/aditivos-da-nanox-aprovados-para-contato-com-alimentos-nos-eua/",
+      "dominio_fonte": "plasticosemrevista.com.br",
+      "data_publicacao": "2024-08-26",
+      "data_acesso": "2026-08-29"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "Empresa de São Carlos, Nanox é finalista regional do Prêmio Inovação Finep 2025",
+      "conteudo_texto": "A matéria registra que a Nanox foi selecionada como finalista regional do Prêmio Finep de Inovação 2025, na categoria Cadeias Agroindustriais Sustentáveis, com o projeto de design de embalagens funcionais para redução da contaminação de alimentos. O texto descreve a empresa como spin-off acadêmico do CDMF/Fapesp, fundada em 2004 e sediada em São Carlos (SP). A publicação afirma que a companhia desenvolveu patentes, produtos e aplicações com marcas próprias e atua na América do Norte, na Europa e na América Latina. A matéria menciona equipe multidisciplinar formada em universidades de referência e parcerias com centros de pesquisa.",
+      "url_fonte": "https://saocarlosemrede.com.br/nanox-premio-finep/",
+      "dominio_fonte": "saocarlosemrede.com.br",
+      "data_publicacao": "2025-09-02",
+      "data_acesso": "2026-08-29"
+    }
+  ]
+}
