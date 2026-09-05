@@ -9,10 +9,12 @@ from pydantic import ValidationError
 from radar.agentes.extractor import ErroExtractor, Extractor
 from radar.base_startups import BaseStartups, inicializar_banco
 from radar.contratos import (
+    Classificacao,
     DocumentoRecuperado,
     EmpresaCandidata,
     FiltrosEstruturados,
     PerfilExtraido,
+    PerfilValidado,
     PlanoConsulta,
     ResultadoRecuperacao,
 )
@@ -249,7 +251,17 @@ def test_tentativas_de_extracao_sao_incrementadas(controlada):
 def test_documentos_completos_nao_entram_no_estado(controlada):
     provedor = ProvedorSequencial(perfil_valido(controlada))
     resultado = Extractor(controlada.base, provedor)(estado(controlada))
-    assert set(resultado) == {"perfil_extraido", "tentativas_extracao", "trajeto"}
+    assert set(resultado) == {
+        "perfil_extraido",
+        "tentativas_extracao",
+        "classificacao",
+        "perfil_validado",
+        "confianca_perfil",
+        "trajeto",
+    }
+    assert resultado["classificacao"] is None
+    assert resultado["perfil_validado"] is None
+    assert resultado["confianca_perfil"] is None
     serializado = json.dumps(
         {
             "perfil_extraido": resultado["perfil_extraido"].model_dump(),
@@ -262,15 +274,22 @@ def test_documentos_completos_nao_entram_no_estado(controlada):
     assert "conteudo_texto" not in serializado
 
 
-def test_diferenca_de_caixa_e_espacos_nao_derruba_o_trecho(controlada):
+def test_extractor_nao_julga_literalidade_do_trecho_citado(controlada):
+    """A autoridade sobre proveniência literal é o Evidence Validator.
+
+    Se o Extractor também derrubasse aqui, nenhuma afirmação não literal
+    chegaria ao validador, ``taxa_derrubada`` seria estruturalmente zero e o
+    laço R2 viraria código morto.
+    """
     afirmacoes = perfil_valido(controlada)["afirmacoes"]
-    afirmacoes[0]["trecho_citado"] = (
-        "o BANCO   de imagens\nrotuladas da Acme Robotics é proprietário"
-    )
+    afirmacoes[0]["trecho_citado"] = "a empresa possui um acervo exclusivo de imagens"
     provedor = ProvedorSequencial(perfil_valido(controlada, afirmacoes=afirmacoes))
     resultado = Extractor(controlada.base, provedor)(estado(controlada))
     assert len(provedor.chamadas) == 1
-    assert resultado["perfil_extraido"].afirmacoes[0].categoria == "dados_proprietarios"
+    assert (
+        resultado["perfil_extraido"].afirmacoes[0].trecho_citado
+        == "a empresa possui um acervo exclusivo de imagens"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -392,14 +411,15 @@ def test_id_de_startup_divergente_e_rejeitado(controlada):
     assert "id_startup" in provedor.chamadas[1][-1][1]
 
 
-def test_trecho_nao_literal_e_rejeitado(controlada):
+def test_trecho_nao_literal_nao_consome_o_retry_corretivo(controlada):
+    """Retry corretivo existe para violação de contrato, não para proveniência."""
     afirmacoes = perfil_valido(controlada)["afirmacoes"]
     afirmacoes[0]["trecho_citado"] = "a empresa possui um acervo exclusivo de imagens"
     invalido = perfil_valido(controlada, afirmacoes=afirmacoes)
     provedor = ProvedorSequencial(invalido, invalido)
-    with pytest.raises(ErroExtractor):
-        Extractor(controlada.base, provedor)(estado(controlada))
-    assert "não ocorre literalmente" in provedor.chamadas[1][-1][1]
+    resultado = Extractor(controlada.base, provedor)(estado(controlada))
+    assert len(provedor.chamadas) == 1
+    assert resultado["perfil_extraido"].id_startup == controlada.id_startup
 
 
 def test_saida_estruturada_malformada_e_rejeitada(controlada):
@@ -444,7 +464,7 @@ def test_ausencia_explicita_com_evidencia_literal_e_aceita(controlada):
     assert len(provedor.chamadas) == 1
 
 
-def test_silencio_nao_vira_ausencia_explicita(controlada):
+def test_silencio_nao_vira_ausencia_explicita_mas_o_extractor_nao_derruba(controlada):
     afirmacoes = perfil_valido(controlada)["afirmacoes"]
     afirmacoes.append(
         {
@@ -456,11 +476,14 @@ def test_silencio_nao_vira_ausencia_explicita(controlada):
             "trecho_citado": "nenhum documento menciona dados proprietários de linguagem",
         }
     )
-    invalido = perfil_valido(controlada, afirmacoes=afirmacoes)
-    provedor = ProvedorSequencial(invalido, invalido)
-    with pytest.raises(ErroExtractor):
-        Extractor(controlada.base, provedor)(estado(controlada))
-    assert "não ocorre literalmente" in provedor.chamadas[1][-1][1]
+    fabricado = perfil_valido(controlada, afirmacoes=afirmacoes)
+    provedor = ProvedorSequencial(fabricado)
+    resultado = Extractor(controlada.base, provedor)(estado(controlada))
+    # O Extractor não julga a fabricação: ele a proíbe no prompt e delega a
+    # conferência ao validador, que derruba a afirmação sem lastro literal.
+    assert len(provedor.chamadas) == 1
+    assert "Silêncio não é ausência" in provedor.ultimo_prompt
+    assert resultado["perfil_extraido"].afirmacoes[3].polaridade == "ausencia_explicita"
 
 
 # --------------------------------------------------------------------------
@@ -532,3 +555,126 @@ def test_recuperacao_com_documento_de_outra_startup_falha_sem_filtrar(controlada
         )
 
     assert provedor.chamadas == []
+
+
+# --------------------------------------------------------------------------
+# C5 — Toda reextração de R2 é estrita: um único predicado compartilhado
+# --------------------------------------------------------------------------
+
+
+def perfil_validado_bruto(situacoes: list[str]) -> dict:
+    afirmacoes = [
+        {
+            "id_afirmacao": indice,
+            "texto": f"Fato número {indice} sobre a empresa analisada.",
+            "categoria": "dados_proprietarios",
+            "polaridade": "presenca",
+            "id_documento": 101,
+            "trecho_citado": "banco proprietário de imagens rotuladas",
+            "situacao": situacao,
+            "motivo": None if situacao == "confirmada" else "o trecho não é literal",
+        }
+        for indice, situacao in enumerate(situacoes, start=1)
+    ]
+    confirmados = [
+        indice for indice, situacao in enumerate(situacoes, start=1)
+        if situacao == "confirmada"
+    ]
+    return {
+        "afirmacoes_validadas": afirmacoes,
+        "taxa_derrubada": (len(situacoes) - len(confirmados)) / len(situacoes),
+        "hosts_distintos": ["acme.example.com"] if confirmados else [],
+        "estado_dimensoes_gap": [
+            {
+                "dimensao": "dados_proprietarios",
+                "estado": "capacidade_confirmada" if confirmados else "desconhecido",
+                "ids_evidencias": confirmados,
+            },
+            {"dimensao": "workflow_profundo", "estado": "desconhecido", "ids_evidencias": []},
+            {"dimensao": "distribuicao", "estado": "desconhecido", "ids_evidencias": []},
+            {"dimensao": "otimizacao_tecnica", "estado": "desconhecido", "ids_evidencias": []},
+        ],
+    }
+
+
+def classificacao_com_suporte(ids: list[int]) -> dict:
+    return {
+        "classe": "AI-native",
+        "justificativa": (
+            "A empresa treina modelos próprios de detecção. "
+            "Sem esses modelos não resta produto para o cliente."
+        ),
+        "ids_afirmacoes_suporte": ids,
+    }
+
+
+def test_modo_estrito_liga_exatamente_na_metade_derrubada():
+    estado_meio = {
+        "perfil_validado": perfil_validado_bruto(["confirmada", "derrubada"]),
+        "classificacao": classificacao_com_suporte([1]),
+    }
+    assert Extractor._modo_estrito(estado_meio) is True
+
+
+def test_modo_estrito_nao_liga_abaixo_da_metade_com_suporte_confirmado():
+    estado_abaixo = {
+        "perfil_validado": perfil_validado_bruto(
+            ["confirmada", "derrubada", "confirmada"]
+        ),
+        "classificacao": classificacao_com_suporte([1, 3]),
+    }
+    assert Extractor._modo_estrito(estado_abaixo) is False
+
+
+def test_modo_estrito_liga_com_suporte_derrubado_abaixo_do_limiar():
+    """Toda volta ao Extractor é estrita, inclusive a motivada pelo suporte."""
+    estado_suporte = {
+        "perfil_validado": perfil_validado_bruto(
+            ["confirmada", "derrubada", "confirmada"]
+        ),
+        "classificacao": classificacao_com_suporte([2]),
+    }
+    assert Extractor._modo_estrito(estado_suporte) is True
+
+
+def test_primeira_extracao_nao_usa_modo_estrito(controlada):
+    assert Extractor._modo_estrito({}) is False
+    provedor = ProvedorSequencial(perfil_valido(controlada))
+    Extractor(controlada.base, provedor)(estado(controlada))
+    assert "REEXTRAÇÃO ESTRITA" not in provedor.ultimo_prompt
+
+
+def test_perfil_validado_anterior_sem_classificacao_falha_com_seguranca():
+    entrada = {
+        "perfil_validado": perfil_validado_bruto(["confirmada", "derrubada"]),
+        "classificacao": None,
+    }
+
+    with pytest.raises(ErroExtractor, match="exige a classificação correspondente"):
+        Extractor._modo_estrito(entrada)
+
+
+def test_modo_estrito_e_o_mesmo_predicado_de_r2():
+    from radar.agentes.roteadores import precisa_reextrair, rotear_r2
+
+    casos = (
+        (["confirmada", "derrubada"], [1]),
+        (["confirmada", "derrubada", "confirmada"], [1, 3]),
+        (["confirmada", "derrubada", "confirmada"], [2]),
+        (["derrubada"], [1]),
+    )
+    for situacoes, suporte in casos:
+        estado_caso = {
+            "perfil_validado": perfil_validado_bruto(situacoes),
+            "classificacao": classificacao_com_suporte(suporte),
+            "tentativas_extracao": 1,
+        }
+        esperado = rotear_r2(estado_caso) == "reextrair"
+        assert Extractor._modo_estrito(estado_caso) is esperado
+        assert (
+            precisa_reextrair(
+                PerfilValidado.model_validate(estado_caso["perfil_validado"]),
+                Classificacao.model_validate(estado_caso["classificacao"]),
+            )
+            is esperado
+        )

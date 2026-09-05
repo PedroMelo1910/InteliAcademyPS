@@ -12,6 +12,7 @@ from radar.configuracao import TETO_DOCUMENTOS_DESCOBERTA
 from radar.contratos import (
     DocumentoIntegral,
     DocumentoRecuperado,
+    DocumentoVerificavel,
     EmpresaCandidata,
     FiltrosEstruturados,
     PlanoConsulta,
@@ -320,6 +321,34 @@ class BaseStartups:
                 f"documentos {invasores} pertencem a outra startup, não à {id_startup}"
             )
         return [DocumentoIntegral.model_validate(dict(por_id[item])) for item in ids]
+
+    def carregar_documentos_verificaveis(
+        self, ids_documentos: Sequence[object]
+    ) -> dict[int, DocumentoVerificavel]:
+        """Releitura tolerante dos documentos citados, indexada por id.
+
+        Diferente de ``carregar_documentos``, um id ausente não interrompe a
+        execução: some do resultado. Quem chama é o Evidence Validator, que
+        precisa transformar cada falha de proveniência em uma afirmação
+        derrubada com motivo, e não em uma análise abortada.
+        """
+        ids = list(dict.fromkeys(ids_documentos))
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT id AS id_documento, startup_id AS id_startup,
+                       conteudo_texto, dominio_fonte
+                FROM documentos WHERE id IN ({marcadores})
+                """,
+                tuple(ids),
+            ).fetchall()
+        return {
+            linha["id_documento"]: DocumentoVerificavel.model_validate(dict(linha))
+            for linha in linhas
+        }
 
     def recuperar(
         self, plano: PlanoConsulta, startup_selecionada: int | None = None

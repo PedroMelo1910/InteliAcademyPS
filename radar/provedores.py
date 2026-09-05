@@ -16,7 +16,7 @@ from radar.configuracao import (
     MODELO_GEMINI,
     MODELO_RERANK_NVIDIA,
 )
-from radar.contratos import PerfilExtraido, PlanoConsulta
+from radar.contratos import Classificacao, PerfilExtraido, PlanoConsulta
 
 
 class ProvedorPlanoConsulta(Protocol):
@@ -61,6 +61,30 @@ class ProvedorGeminiPerfilExtraido:
         )
         self._estruturado = modelo.with_structured_output(
             PerfilExtraido, method="json_schema"
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorClassificacao(Protocol):
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        """Produz uma classificação estruturada ainda sujeita à validação da fronteira."""
+
+
+class ProvedorGeminiClassificacao:
+    """Adaptador de structured output do Classifier; o nó não conhece a rede."""
+
+    def __init__(self, api_key: str):
+        modelo = ChatGoogleGenerativeAI(
+            model=MODELO_GEMINI,
+            api_key=api_key,
+            temperature=None,
+            retries=1,
+            request_timeout=60,
+        )
+        self._estruturado = modelo.with_structured_output(
+            Classificacao, method="json_schema"
         )
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:

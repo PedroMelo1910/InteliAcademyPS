@@ -4,9 +4,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from radar.agentes.roteadores import precisa_reextrair
 from radar.base_startups import BaseStartups, ErroDocumentosStartup
 from radar.contratos import (
     CATEGORIAS_AFIRMACAO,
+    Classificacao,
     CATEGORIAS_ESTRUTURAIS,
     LIMITE_TRECHO_CITADO,
     MINIMO_CARACTERES_TRECHO_CITADO,
@@ -15,11 +17,18 @@ from radar.contratos import (
     EmpresaCandidata,
     EstadoRadar,
     PerfilExtraido,
+    PerfilValidado,
     PlanoConsulta,
     ResultadoRecuperacao,
-    normalizar_texto_citavel,
 )
 from radar.provedores import ProvedorPerfilExtraido
+
+
+CAMPOS_DERIVADOS_DA_EXTRACAO: tuple[str, ...] = (
+    "classificacao",
+    "perfil_validado",
+    "confianca_perfil",
+)
 
 
 class ErroExtractor(RuntimeError):
@@ -66,12 +75,18 @@ class Extractor:
         empresa = next(
             (item for item in resultado.empresas if item.id_startup == id_startup), None
         )
-        perfil = self._extrair_com_validacao(id_startup, empresa, plano, documentos)
-        return {
+        modo_estrito = self._modo_estrito(estado)
+        perfil = self._extrair_com_validacao(
+            id_startup, empresa, plano, documentos, modo_estrito
+        )
+        saida: dict[str, Any] = {
             "perfil_extraido": perfil,
             "tentativas_extracao": int(estado.get("tentativas_extracao", 0)) + 1,
             "trajeto": ["extractor"],
         }
+        for campo in CAMPOS_DERIVADOS_DA_EXTRACAO:
+            saida[campo] = None
+        return saida
 
     # ------------------------------------------------------------------
     # Pré-condições do nó
@@ -110,6 +125,37 @@ class Extractor:
             )
         return candidatas.pop()
 
+    @staticmethod
+    def _modo_estrito(estado: EstadoRadar) -> bool:
+        """Espelha exatamente o predicado de R2, sem duplicar a regra.
+
+        Uma extração fresca não tem perfil validado anterior e nunca é estrita.
+        """
+        bruto = estado.get("perfil_validado")
+        if bruto is None:
+            return False
+        try:
+            perfil = PerfilValidado.model_validate(bruto)
+        except (ValidationError, ValueError, TypeError) as erro:
+            raise ErroExtractor(
+                "o perfil validado anterior está fora do contrato e não permite "
+                f"reextração segura: {erro}"
+            ) from erro
+        bruto_classificacao = estado.get("classificacao")
+        if bruto_classificacao is None:
+            raise ErroExtractor(
+                "um perfil validado anterior exige a classificação correspondente "
+                "para decidir a reextração com segurança"
+            )
+        try:
+            classificacao = Classificacao.model_validate(bruto_classificacao)
+        except (ValidationError, ValueError, TypeError) as erro:
+            raise ErroExtractor(
+                "a classificação anterior está fora do contrato e não permite "
+                f"reextração segura: {erro}"
+            ) from erro
+        return precisa_reextrair(perfil, classificacao)
+
     # ------------------------------------------------------------------
     # Fronteira do LLM
     # ------------------------------------------------------------------
@@ -120,11 +166,17 @@ class Extractor:
         empresa: EmpresaCandidata | None,
         plano: PlanoConsulta,
         documentos: list[DocumentoIntegral],
+        modo_estrito: bool = False,
     ) -> PerfilExtraido:
         erro_anterior: str | None = None
         for tentativa in range(2):
             mensagens = self._montar_mensagens(
-                id_startup, empresa, plano, documentos, erro_anterior
+                id_startup,
+                empresa,
+                plano,
+                documentos,
+                erro_anterior,
+                modo_estrito,
             )
             try:
                 bruto = self.provedor.invocar(mensagens)
@@ -158,27 +210,25 @@ class Extractor:
     def _validar(
         bruto: object, id_startup: int, documentos: list[DocumentoIntegral]
     ) -> PerfilExtraido:
+        """Confere estrutura e escopo — nunca proveniência literal.
+
+        A conferência do trecho contra o texto completo pertence exclusivamente
+        ao Evidence Validator. Duplicá-la aqui faria o Extractor abortar
+        primeiro, deixando ``taxa_derrubada`` estruturalmente em zero e o laço
+        R2 inalcançável em produção.
+        """
         perfil = PerfilExtraido.model_validate(bruto)
         if perfil.id_startup != id_startup:
             raise ValueError(
                 f"id_startup {perfil.id_startup} difere da startup analisada {id_startup}"
             )
-        conteudos = {
-            documento.id_documento: normalizar_texto_citavel(documento.conteudo_texto)
-            for documento in documentos
-        }
+        ids_permitidos = {documento.id_documento for documento in documentos}
         for afirmacao in perfil.afirmacoes:
-            if afirmacao.id_documento not in conteudos:
+            if afirmacao.id_documento not in ids_permitidos:
                 raise ValueError(
                     f"a afirmação {afirmacao.id_afirmacao} cita o documento "
                     f"{afirmacao.id_documento}, fora do conjunto permitido "
-                    f"{sorted(conteudos)}"
-                )
-            trecho = normalizar_texto_citavel(afirmacao.trecho_citado)
-            if trecho not in conteudos[afirmacao.id_documento]:
-                raise ValueError(
-                    f"o trecho da afirmação {afirmacao.id_afirmacao} não ocorre "
-                    f"literalmente no documento {afirmacao.id_documento}"
+                    f"{sorted(ids_permitidos)}"
                 )
         return perfil
 
@@ -200,10 +250,13 @@ class Extractor:
 
     @staticmethod
     def _instrucao(
-        id_startup: int, plano: PlanoConsulta, ids_permitidos: list[int]
+        id_startup: int,
+        plano: PlanoConsulta,
+        ids_permitidos: list[int],
+        modo_estrito: bool = False,
     ) -> str:
         estruturais = ", ".join(sorted(CATEGORIAS_ESTRUTURAIS))
-        return (
+        instrucao = (
             "Você é o Extractor do NVIDIA Startup AI Radar. Produza um PerfilExtraido "
             "estritamente estruturado sobre a startup indicada, usando exclusivamente "
             "os documentos fornecidos nesta mensagem.\n"
@@ -232,6 +285,14 @@ class Extractor:
             "Extractor.\n"
             f"Foco da análise: {plano.foco_analise}"
         )
+        if modo_estrito:
+            instrucao += (
+                "\n- REEXTRAÇÃO ESTRITA: a validação anterior rejeitou a evidência "
+                "produzida. Reduza as afirmações ao que possuir trecho literal "
+                "inequívoco nos documentos permitidos, copiado caractere a "
+                "caractere, incluindo pontuação e acentuação."
+            )
+        return instrucao
 
     @staticmethod
     def _dados(
@@ -260,10 +321,14 @@ class Extractor:
         plano: PlanoConsulta,
         documentos: list[DocumentoIntegral],
         erro_anterior: str | None,
+        modo_estrito: bool = False,
     ) -> list[tuple[str, str]]:
         ids_permitidos = [documento.id_documento for documento in documentos]
         mensagens = [
-            ("system", self._instrucao(id_startup, plano, ids_permitidos)),
+            (
+                "system",
+                self._instrucao(id_startup, plano, ids_permitidos, modo_estrito),
+            ),
             ("human", self._dados(id_startup, empresa, documentos)),
         ]
         if erro_anterior:
