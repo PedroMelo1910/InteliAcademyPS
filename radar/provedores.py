@@ -8,7 +8,7 @@ from typing import Protocol
 from langchain_core.documents import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, NVIDIARerank
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from radar.configuracao import (
     DIMENSAO_EMBEDDING_NVIDIA,
@@ -16,7 +16,13 @@ from radar.configuracao import (
     MODELO_GEMINI,
     MODELO_RERANK_NVIDIA,
 )
-from radar.contratos import Classificacao, PerfilExtraido, PlanoConsulta
+from radar.contratos import (
+    BriefingRascunho,
+    Classificacao,
+    PerfilExtraido,
+    PlanoConsulta,
+    RecomendacaoRascunho,
+)
 
 
 class ProvedorPlanoConsulta(Protocol):
@@ -89,6 +95,83 @@ class ProvedorGeminiClassificacao:
 
     def invocar(self, mensagens: list[tuple[str, str]]) -> object:
         return self._estruturado.invoke(mensagens)
+
+
+class RascunhosRecomendacao(BaseModel):
+    """Envelope de saída estruturada do Recommendation: só rascunhos.
+
+    O LLM produz de 1 a 5 ``RecomendacaoRascunho`` numa única chamada. O modelo
+    final ``Recomendacao`` nunca é pedido a ele: prioridade, complexidade e
+    fit-score sequer existem neste schema, e as evidências entram como ids que
+    o nó resolve depois.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rascunhos: list[RecomendacaoRascunho] = Field(min_length=1, max_length=5)
+
+
+class ProvedorRecomendacaoRascunho(Protocol):
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        """Produz rascunhos ainda sujeitos à validação de proveniência do nó."""
+
+
+class ProvedorGeminiRecomendacaoRascunho:
+    """Adaptador de structured output do Recommendation; o nó não conhece a rede."""
+
+    def __init__(self, api_key: str):
+        modelo = ChatGoogleGenerativeAI(
+            model=MODELO_GEMINI,
+            api_key=api_key,
+            temperature=None,
+            retries=1,
+            request_timeout=60,
+        )
+        self._estruturado = modelo.with_structured_output(
+            RascunhosRecomendacao, method="json_schema"
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorBriefingRascunho(Protocol):
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        """Produz as ~6 frases do briefing, ainda sujeitas à conferência do nó."""
+
+
+class ProvedorGeminiBriefingRascunho:
+    """Adaptador de structured output do Briefing; o nó não conhece a rede.
+
+    O schema oferecido ao modelo é o reduzido: tese, síntese e pontos, cada um
+    com os ids que ele escolheu. Classe, fit-score, recomendações, fontes,
+    avisos e rodapé não existem nele.
+    """
+
+    def __init__(self, api_key: str):
+        modelo = ChatGoogleGenerativeAI(
+            model=MODELO_GEMINI,
+            api_key=api_key,
+            temperature=None,
+            retries=1,
+            request_timeout=60,
+        )
+        self._estruturado = modelo.with_structured_output(
+            BriefingRascunho, method="json_schema"
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorContextoNvidia(Protocol):
+    def consultar(self, consulta: str) -> object:
+        """Recupera trechos NVIDIA; a validação do contrato fica na fronteira do nó.
+
+        ``ConhecimentoNvidia`` satisfaz este protocolo estruturalmente: o nó do
+        grafo depende da forma da chamada, nunca da classe concreta, e por isso
+        os testes injetam um consultor determinístico sem tocar a rede.
+        """
 
 
 # --------------------------------------------------------------------------

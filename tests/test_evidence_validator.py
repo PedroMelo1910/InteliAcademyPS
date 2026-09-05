@@ -910,7 +910,16 @@ def _despejo(saida: dict) -> str:
 
 def test_no_nunca_coloca_documentos_no_estado(dupla: BaseDupla):
     saida = validar(dupla, afirmacoes=afirmacoes_confirmadas(dupla))
-    assert set(saida) <= {"perfil_validado", "confianca_perfil", "trajeto", "erros"}
+    assert set(saida) <= {
+        "perfil_validado",
+        "confianca_perfil",
+        "contexto_nvidia",
+        "recomendacoes",
+        "fit_score",
+        "briefing",
+        "trajeto",
+        "erros",
+    }
     despejo = _despejo(saida)
     assert "conteudo_texto" not in despejo
     assert TEXTO_SITE_A not in despejo

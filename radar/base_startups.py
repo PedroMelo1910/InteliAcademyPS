@@ -11,13 +11,16 @@ from pydantic import TypeAdapter
 from radar.configuracao import TETO_DOCUMENTOS_DESCOBERTA
 from radar.contratos import (
     DocumentoIntegral,
+    FonteBriefing,
     DocumentoRecuperado,
     DocumentoVerificavel,
     EmpresaCandidata,
     FiltrosEstruturados,
+    MetadadoDocumentoFitScore,
     PlanoConsulta,
     ResultadoRecuperacao,
     StartupCurada,
+    normalizar_dominio,
 )
 
 
@@ -347,6 +350,92 @@ class BaseStartups:
             ).fetchall()
         return {
             linha["id_documento"]: DocumentoVerificavel.model_validate(dict(linha))
+            for linha in linhas
+        }
+
+    def carregar_metadados_fit_score(
+        self, ids_documentos: Sequence[object]
+    ) -> dict[int, MetadadoDocumentoFitScore]:
+        """Metadados de proveniência e datação dos documentos citados, por id.
+
+        O fit-score é uma função pura: ele não abre o SQLite. Esta é a fronteira
+        que entrega, de forma explícita, a URL, o host normalizado e a data de
+        publicação de que a rubrica precisa. Como em
+        ``carregar_documentos_verificaveis``, id ausente some do resultado — a
+        completude é conferida pelo contrato ``EntradaFitScore``, que é quem
+        sabe quais documentos o perfil realmente referencia.
+        """
+        ids = list(dict.fromkeys(ids_documentos))
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT id AS id_documento, url_fonte, dominio_fonte, data_publicacao
+                FROM documentos WHERE id IN ({marcadores})
+                """,
+                tuple(ids),
+            ).fetchall()
+        return {
+            linha["id_documento"]: MetadadoDocumentoFitScore(
+                id_documento=linha["id_documento"],
+                url_fonte=linha["url_fonte"],
+                host_normalizado=normalizar_dominio(linha["dominio_fonte"]),
+                data_publicacao=linha["data_publicacao"],
+            )
+            for linha in linhas
+        }
+
+    def carregar_site_oficial(self, id_startup: int) -> str:
+        """Site oficial da startup, para o cabeçalho do Briefing.
+
+        ``EmpresaCandidata`` é o snapshot da recuperação e não carrega o site;
+        esta é a menor leitura parametrizada que o cabeçalho da §11.2 exige. A
+        projeção é deliberadamente de uma coluna: ``classe_referencia`` não
+        entra em nenhuma consulta de execução.
+        """
+        with conectar(self.caminho_banco) as conexao:
+            linha = conexao.execute(
+                "SELECT site FROM startups WHERE id = ?", (id_startup,)
+            ).fetchone()
+        if linha is None:
+            raise ErroDocumentosStartup(
+                f"a startup {id_startup} não existe na base"
+            )
+        return linha["site"]
+
+    def carregar_fontes_briefing(
+        self, id_startup: int, ids_documentos: Sequence[object]
+    ) -> dict[int, FonteBriefing]:
+        """Projeção pública dos documentos citados, isolada por startup.
+
+        O ``AND startup_id = ?`` é a fronteira: um id de documento de outra
+        empresa simplesmente não volta, e quem chama descobre a ausência em vez
+        de exibir a fonte errada sob o nome desta startup.
+        """
+        ids = list(dict.fromkeys(ids_documentos))
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" for _ in ids)
+        with conectar(self.caminho_banco) as conexao:
+            linhas = conexao.execute(
+                f"""
+                SELECT id AS id_documento, tipo, titulo, url_fonte,
+                       dominio_fonte, data_publicacao
+                FROM documentos
+                WHERE id IN ({marcadores}) AND startup_id = ?
+                """,
+                (*ids, id_startup),
+            ).fetchall()
+        return {
+            linha["id_documento"]: FonteBriefing(
+                url_fonte=linha["url_fonte"],
+                host_normalizado=normalizar_dominio(linha["dominio_fonte"]),
+                tipo=linha["tipo"],
+                titulo=linha["titulo"],
+                data_publicacao=linha["data_publicacao"],
+            )
             for linha in linhas
         }
 

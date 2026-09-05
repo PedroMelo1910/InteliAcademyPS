@@ -257,11 +257,19 @@ def test_documentos_completos_nao_entram_no_estado(controlada):
         "classificacao",
         "perfil_validado",
         "confianca_perfil",
+        "contexto_nvidia",
+        "recomendacoes",
+        "fit_score",
+        "briefing",
         "trajeto",
     }
     assert resultado["classificacao"] is None
     assert resultado["perfil_validado"] is None
     assert resultado["confianca_perfil"] is None
+    assert resultado["contexto_nvidia"] is None
+    assert resultado["recomendacoes"] is None
+    assert resultado["fit_score"] is None
+    assert resultado["briefing"] is None
     serializado = json.dumps(
         {
             "perfil_extraido": resultado["perfil_extraido"].model_dump(),

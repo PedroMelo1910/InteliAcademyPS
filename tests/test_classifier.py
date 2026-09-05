@@ -628,7 +628,11 @@ def test_classificar_invalida_o_estado_derivado_da_classificacao_anterior():
     assert CAMPOS_DERIVADOS_DA_CLASSIFICACAO == (
         "perfil_validado",
         "confianca_perfil",
+        "contexto_nvidia",
+        "recomendacoes",
+        "fit_score",
+        "briefing",
     )
     saida = Classifier(ProvedorSequencial(classificacao()))(estado(perfil_ai_native()))
-    assert saida["perfil_validado"] is None
-    assert saida["confianca_perfil"] is None
+    for campo in CAMPOS_DERIVADOS_DA_CLASSIFICACAO:
+        assert saida[campo] is None

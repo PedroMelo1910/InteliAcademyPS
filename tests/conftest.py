@@ -105,3 +105,328 @@ class RerankFalso:
             for texto in textos
         ]
 
+
+class ConsultorNvidiaFalso:
+    """ProvedorContextoNvidia determinístico: nenhuma rede, consulta registrada."""
+
+    def __init__(self, contexto=None, erro: Exception | None = None):
+        self._contexto = contexto if contexto is not None else contexto_nvidia_falso()
+        self._erro = erro
+        self.chamadas = 0
+        self.consultas: list[str] = []
+
+    def consultar(self, consulta: str):
+        self.chamadas += 1
+        self.consultas.append(consulta)
+        if self._erro is not None:
+            raise self._erro
+        return self._contexto
+
+
+def trecho_nvidia_falso(
+    id_chunk: int,
+    *,
+    tecnologia: str | None = "NVIDIA NIM",
+    topico: str | None = None,
+    score_rerank: float = 0.9,
+):
+    """Um ``TrechoNvidia`` coerente: origem e tecnologia sempre combinam."""
+    from radar.contratos import TrechoNvidia
+
+    origem = "tecnologia" if tecnologia is not None else "conceitual"
+    rotulo = topico or (tecnologia or "ai-native-services")
+    return TrechoNvidia(
+        id_chunk=id_chunk,
+        topico=rotulo,
+        origem=origem,
+        tecnologia=tecnologia,
+        breadcrumb=f"{rotulo} > seção {id_chunk}",
+        texto=(
+            f"Trecho {id_chunk} da base NVIDIA sobre {rotulo}, com inferência, "
+            "latência e custo em produção."
+        ),
+        fonte_url=f"https://nvidia.example/{id_chunk}",
+        score_rerank=score_rerank,
+    )
+
+
+def contexto_nvidia_falso(consulta: str = "consulta NVIDIA de teste"):
+    """Contexto com 5 chunks de tecnologia e 1 conceitual, dentro da faixa 5–8."""
+    from radar.contratos import ContextoNvidia
+
+    trechos = [
+        trecho_nvidia_falso(101, tecnologia="NVIDIA NIM", score_rerank=0.95),
+        trecho_nvidia_falso(102, tecnologia="NVIDIA Triton Inference Server", score_rerank=0.9),
+        trecho_nvidia_falso(103, tecnologia="TensorRT-LLM", score_rerank=0.85),
+        trecho_nvidia_falso(104, tecnologia="NeMo Guardrails", score_rerank=0.8),
+        trecho_nvidia_falso(105, tecnologia="NVIDIA RAPIDS", score_rerank=0.75),
+        trecho_nvidia_falso(
+            106, tecnologia=None, topico="ai-native-services", score_rerank=0.7
+        ),
+    ]
+    return ContextoNvidia(consulta_gerada=consulta, trechos=trechos)
+
+
+DIMENSOES_ESTRUTURAIS = (
+    "dados_proprietarios",
+    "workflow_profundo",
+    "distribuicao",
+    "otimizacao_tecnica",
+)
+
+
+def trecho_citado_falso(id_afirmacao: int) -> str:
+    """O trecho canônico da afirmação: recomendação e perfil citam o mesmo."""
+    return f"Trecho público verificável para a evidência {id_afirmacao} citada."
+
+
+def afirmacao_validada_falsa(
+    id_afirmacao: int,
+    categoria: str,
+    *,
+    polaridade: str | None = None,
+    situacao: str = "confirmada",
+    id_documento: int | None = None,
+    texto: str | None = None,
+    motivo: str | None = None,
+):
+    """``AfirmacaoValidada`` mínima e coerente com as regras de polaridade."""
+    from radar.contratos import AfirmacaoValidada
+
+    if polaridade is None:
+        polaridade = "neutro" if categoria not in DIMENSOES_ESTRUTURAIS else "presenca"
+    return AfirmacaoValidada(
+        id_afirmacao=id_afirmacao,
+        texto=texto or f"A evidência número {id_afirmacao} está documentada.",
+        categoria=categoria,
+        polaridade=polaridade,
+        id_documento=id_documento if id_documento is not None else id_afirmacao,
+        trecho_citado=trecho_citado_falso(id_afirmacao),
+        situacao=situacao,
+        motivo=(
+            None
+            if situacao == "confirmada"
+            else (motivo or "Trecho não ocorre na fonte.")
+        ),
+    )
+
+
+def perfil_validado_falso(itens, hosts: list[str] | None = None):
+    """Monta o ``PerfilValidado`` derivando dimensões e taxa das afirmações."""
+    from radar.contratos import EstadoDimensaoGap, PerfilValidado
+
+    estados = []
+    for dimensao in DIMENSOES_ESTRUTURAIS:
+        presencas = sorted(
+            item.id_afirmacao
+            for item in itens
+            if item.situacao == "confirmada"
+            and item.categoria == dimensao
+            and item.polaridade == "presenca"
+        )
+        ausencias = sorted(
+            item.id_afirmacao
+            for item in itens
+            if item.situacao == "confirmada"
+            and item.categoria == dimensao
+            and item.polaridade == "ausencia_explicita"
+        )
+        if presencas and ausencias:
+            estado, ids = "desconhecido", sorted(presencas + ausencias)
+        elif presencas:
+            estado, ids = "capacidade_confirmada", presencas
+        elif ausencias:
+            estado, ids = "gap_confirmado", ausencias
+        else:
+            estado, ids = "desconhecido", []
+        estados.append(
+            EstadoDimensaoGap(dimensao=dimensao, estado=estado, ids_evidencias=ids)
+        )
+    derrubadas = sum(1 for item in itens if item.situacao == "derrubada")
+    return PerfilValidado(
+        afirmacoes_validadas=itens,
+        taxa_derrubada=derrubadas / len(itens),
+        hosts_distintos=sorted(hosts if hosts is not None else ["fonte-a.example"]),
+        estado_dimensoes_gap=estados,
+    )
+
+
+class ProvedorSequencialFalso:
+    """Provedor de structured output com uma resposta programada por chamada.
+
+    Um item ``Exception`` é levantado em vez de devolvido, o que permite testar
+    falha de provedor e falha de contrato com o mesmo fake.
+    """
+
+    def __init__(self, *respostas):
+        self._respostas = list(respostas)
+        self.chamadas = 0
+        self.mensagens: list[list[tuple[str, str]]] = []
+
+    def invocar(self, mensagens):
+        self.chamadas += 1
+        self.mensagens.append(mensagens)
+        if not self._respostas:
+            raise AssertionError(
+                f"o provedor foi chamado {self.chamadas} vezes, além das respostas "
+                "programadas"
+            )
+        resposta = self._respostas.pop(0)
+        if isinstance(resposta, Exception):
+            raise resposta
+        return resposta
+
+
+# ----------------------------------------------------------------------
+# Apoio do marco Briefing
+# ----------------------------------------------------------------------
+
+
+def citacao_nvidia_falsa(id_chunk: int = 101, **ajustes):
+    """``CitacaoNvidia`` idêntica ao chunk correspondente do contexto falso."""
+    from radar.contratos import CitacaoNvidia
+
+    trecho = trecho_nvidia_falso(id_chunk)
+    campos = {
+        "id_chunk": trecho.id_chunk,
+        "topico": trecho.topico,
+        "origem": trecho.origem,
+        "tecnologia": trecho.tecnologia,
+        "fonte_url": trecho.fonte_url,
+        "breadcrumb": trecho.breadcrumb,
+    }
+    campos.update(ajustes)
+    return CitacaoNvidia(**campos)
+
+
+def recomendacao_falsa(
+    gap: str = "distribuicao",
+    *,
+    tecnologias: list[str] | None = None,
+    id_afirmacao: int = 1,
+    id_documento: int = 1,
+    id_chunk: int = 101,
+    url_fonte: str = "https://fonte-a.example/materia",
+    trecho_citado: str | None = None,
+    citacao=None,
+):
+    """``Recomendacao`` completa e coerente com o perfil e o contexto falsos.
+
+    O trecho citado é o da afirmação referenciada e a citação NVIDIA reproduz o
+    chunk referenciado — é assim que o nó Recommendation real a constrói.
+    """
+    from radar.contratos import EvidenciaStartup, ProximaAcao, Recomendacao
+
+    return Recomendacao(
+        gap_enderecado=gap,
+        tecnologias=tecnologias or ["NVIDIA Inception"],
+        justificativa_tecnica="O programa abre acesso a suporte técnico dedicado.",
+        justificativa_negocio="A validação encurta o ciclo de venda enterprise.",
+        prioridade="media",
+        complexidade="baixa",
+        proxima_acao=ProximaAcao(
+            tipo_acao="convite_inception",
+            detalhe="Enviar o convite de admissão ao programa nesta semana.",
+        ),
+        evidencias_startup=[
+            EvidenciaStartup(
+                id_afirmacao=id_afirmacao,
+                id_documento=id_documento,
+                url_fonte=url_fonte,
+                trecho_citado=trecho_citado or trecho_citado_falso(id_afirmacao),
+            )
+        ],
+        citacoes_nvidia=[
+            citacao if citacao is not None else citacao_nvidia_falsa(id_chunk)
+        ],
+    )
+
+
+def cabecalho_falso(**ajustes):
+    from datetime import date
+
+    from radar.contratos import CabecalhoBriefing
+
+    campos = {
+        "nome": "Caju",
+        "site": "https://www.caju.com.br/",
+        "setor": "Fintech / RH",
+        "estagio": "série B",
+        "localizacao": "São Paulo, SP",
+        "data_geracao": date(2026, 9, 3),
+        "consulta_original": "fintech brasileira de benefícios com cartão",
+    }
+    campos.update(ajustes)
+    return CabecalhoBriefing(**campos)
+
+
+def rodape_falso(**ajustes):
+    from datetime import date
+
+    from radar.contratos import RodapeBriefing
+
+    campos = {
+        "versao_rubrica": "rubrica-v1",
+        "data_execucao": date(2026, 9, 3),
+        "afirmacoes_confirmadas": 2,
+        "afirmacoes_derrubadas": 0,
+        "trajeto": ["extractor", "classifier", "evidence_validator", "briefing"],
+        "rota_r3": "prosseguir",
+    }
+    campos.update(ajustes)
+    return RodapeBriefing(**campos)
+
+
+def fonte_falsa(
+    url: str = "https://fonte-a.example/materia",
+    *,
+    tipo: str = "notícia",
+    titulo: str = "Matéria pública sobre a startup",
+    data_publicacao=None,
+):
+    from radar.contratos import FonteBriefing, normalizar_dominio
+    from urllib.parse import urlparse
+
+    return FonteBriefing(
+        url_fonte=url,
+        host_normalizado=normalizar_dominio(urlparse(url).hostname or ""),
+        tipo=tipo,
+        titulo=titulo,
+        data_publicacao=data_publicacao,
+    )
+
+
+def briefing_normal_falso(**ajustes):
+    """``Briefing`` normal mínimo e válido, para exercitar o contrato."""
+    from radar.contratos import Briefing, ConclusaoAncorada, VereditoBriefing
+
+    campos = {
+        "variante": "normal",
+        "cabecalho": cabecalho_falso(),
+        "veredito": VereditoBriefing(
+            classe="AI-enabled",
+            fit_score_total=61,
+            tese="A empresa usa IA no produto e tem lacuna de distribuição.",
+            ids_afirmacoes_suporte=[1],
+        ),
+        "sintese_executiva": ConclusaoAncorada(
+            texto="A startup opera benefícios corporativos com apoio de modelos de terceiros.",
+            ids_afirmacoes_suporte=[1, 2],
+        ),
+        "pontos_de_conversa": [
+            ConclusaoAncorada(
+                texto="Perguntar como o time mede custo por inferência.",
+                ids_afirmacoes_suporte=[2],
+            ),
+            ConclusaoAncorada(
+                texto="Explorar o canal de distribuição atual.",
+                ids_afirmacoes_suporte=[1],
+            ),
+        ],
+        "recomendacoes": [recomendacao_falsa()],
+        "fontes": [fonte_falsa()],
+        "avisos": [],
+        "rodape": rodape_falso(),
+    }
+    campos.update(ajustes)
+    return Briefing(**campos)

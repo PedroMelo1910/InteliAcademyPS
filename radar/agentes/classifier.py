@@ -22,6 +22,10 @@ from radar.provedores import ProvedorClassificacao
 CAMPOS_DERIVADOS_DA_CLASSIFICACAO: tuple[str, ...] = (
     "perfil_validado",
     "confianca_perfil",
+    "contexto_nvidia",
+    "recomendacoes",
+    "fit_score",
+    "briefing",
 )
 
 _PADRAO_NUMERO = re.compile(r"\d+(?:[.,]\d+)?")

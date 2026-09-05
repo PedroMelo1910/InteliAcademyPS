@@ -23,6 +23,17 @@ from radar.contratos import (
 
 MINIMO_HOSTS_CONFIANCA_NORMAL = 2
 
+# A recuperação NVIDIA e a recomendação descendem do perfil validado. Quando
+# este nó reconfere a evidência, o que foi derivado da validação anterior
+# perde o lastro — inclusive num thread retomado, cujo checkpoint traria a
+# recomendação de outra passagem pelo laço de reextração.
+CAMPOS_DERIVADOS_DA_VALIDACAO: tuple[str, ...] = (
+    "contexto_nvidia",
+    "recomendacoes",
+    "fit_score",
+    "briefing",
+)
+
 
 class ErroValidadorEvidencias(RuntimeError):
     """Falha segura: sem perfil, classificação ou recuperação não há o que conferir."""
@@ -94,6 +105,8 @@ class EvidenceValidator:
             "confianca_perfil": self._confianca(confirmadas, taxa, hosts),
             "trajeto": ["evidence_validator"],
         }
+        for campo in CAMPOS_DERIVADOS_DA_VALIDACAO:
+            saida[campo] = None
         # Os canais acumulados recebem apenas o que este nó produziu; devolver a
         # lista inteira duplicaria o histórico ao passar pelo reducer.
         if avisos:
