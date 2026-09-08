@@ -3,6 +3,12 @@ from pydantic import ValidationError
 
 from radar.agentes.classifier import Classifier, ErroClassificador
 from radar.contratos import Classificacao, PerfilExtraido
+from radar.provedores import ProvedorComFallback, falha_operacional
+from tests.conftest import (
+    CORPO_BRUTO_DO_PROVEDOR,
+    ProvedorSequencial,
+    exigir_falha_neutra_de_provedor,
+)
 
 
 # --------------------------------------------------------------------------
@@ -133,23 +139,6 @@ def estado(perfil: dict, **ajustes) -> dict:
     base = {"perfil_extraido": PerfilExtraido.model_validate(perfil)}
     base.update(ajustes)
     return base
-
-
-class ProvedorSequencial:
-    def __init__(self, *respostas):
-        self.respostas = list(respostas)
-        self.chamadas: list[list[tuple[str, str]]] = []
-
-    def invocar(self, mensagens):
-        self.chamadas.append(mensagens)
-        resposta = self.respostas.pop(0)
-        if isinstance(resposta, Exception):
-            raise resposta
-        return resposta
-
-    @property
-    def ultimo_prompt(self) -> str:
-        return "\n".join(texto for _, texto in self.chamadas[-1])
 
 
 # --------------------------------------------------------------------------
@@ -636,3 +625,71 @@ def test_classificar_invalida_o_estado_derivado_da_classificacao_anterior():
     saida = Classifier(ProvedorSequencial(classificacao()))(estado(perfil_ai_native()))
     for campo in CAMPOS_DERIVADOS_DA_CLASSIFICACAO:
         assert saida[campo] is None
+
+
+# --------------------------------------------------------------------------
+# Falha segura: a mensagem não nomeia o provedor
+# --------------------------------------------------------------------------
+
+
+def test_queda_do_provedor_nao_nomeia_gemini_nem_groq():
+    provedor = ProvedorSequencial(ConnectionError(CORPO_BRUTO_DO_PROVEDOR))
+    entrada = estado(perfil_ai_native())
+
+    with pytest.raises(ErroClassificador) as falha:
+        Classifier(provedor)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhuma classificação foi fabricada" in mensagem
+    assert len(provedor.chamadas) == 1
+    assert falha_operacional(falha.value) is True
+    assert "classificacao" not in entrada
+
+
+def test_duas_respostas_fora_do_contrato_nao_nomeiam_o_provedor():
+    invalida = classificacao(ids_afirmacoes_suporte=[99])
+    provedor = ProvedorSequencial(invalida, invalida)
+    entrada = estado(perfil_ai_native())
+
+    with pytest.raises(ErroClassificador) as falha:
+        Classifier(provedor)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "duas vezes fora do contrato estruturado" in mensagem
+    assert "nenhuma classificação foi gravada no estado" in mensagem
+    assert len(provedor.chamadas) == 2
+    assert falha_operacional(falha.value) is False
+    assert "classificacao" not in entrada
+
+
+def test_falha_da_reserva_nao_e_atribuida_ao_gemini():
+    """O caso que motivou a correção: quem respondeu foi a reserva.
+
+    O primário cai por indisponibilidade nas duas tentativas, a reserva atende
+    nas duas e devolve fora do contrato. A resposta final veio do Groq, então
+    dizer "O Gemini respondeu duas vezes" seria factualmente errado. O nó não
+    observa a identidade do provedor e, por isso, não nomeia nenhum.
+    """
+    invalida = classificacao(ids_afirmacoes_suporte=[99])
+    primario = ProvedorSequencial(
+        ConnectionError(CORPO_BRUTO_DO_PROVEDOR),
+        ConnectionError(CORPO_BRUTO_DO_PROVEDOR),
+    )
+    reserva = ProvedorSequencial(invalida, invalida)
+    composto = ProvedorComFallback(primario, reserva, fronteira="classifier")
+    entrada = estado(perfil_ai_native())
+
+    with pytest.raises(ErroClassificador) as falha:
+        Classifier(composto)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhuma classificação foi gravada no estado" in mensagem
+    # Teto por fronteira: duas ao primário e duas à reserva, sem alternância.
+    assert len(primario.chamadas) == 2
+    assert len(reserva.chamadas) == 2
+    # A reserva respondeu fora do contrato: é defeito, não indisponibilidade.
+    assert falha_operacional(falha.value) is False
+    assert "classificacao" not in entrada

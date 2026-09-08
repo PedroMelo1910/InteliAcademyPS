@@ -10,6 +10,7 @@ import pytest
 from tests.conftest import EmbeddingFalso, RerankFalso
 from radar.provedores import (
     ErroProvedorEmbedding,
+    _descrever_falha_de_provedor,
     ErroProvedorRerank,
     ErroRerankIndisponivel,
     OrdenacaoListwise,
@@ -262,3 +263,170 @@ def test_fakes_sao_deterministicos():
     primeira = rerank.reordenar("triton", ["triton serve", "nada"])
     segunda = rerank.reordenar("triton", ["triton serve", "nada"])
     assert primeira == segunda
+
+
+# ----------------------------------------------------------------------
+# Falha de terceiro nunca vira texto do projeto
+# ----------------------------------------------------------------------
+#
+# A fronteira LLM (``ProvedorComFallback``) já extraía só classe e código
+# seguro. Os adaptadores NVIDIA faziam o oposto: interpolavam ``str(excecao)``
+# inteira e encadeavam a original com ``from excecao``, deixando corpo de
+# resposta, cabeçalho e credencial alcançáveis por mensagem e por traceback.
+
+import logging
+import traceback
+
+CHAVE_FALSA = "nvapi-0000FALSA1111CHAVE2222NAOPODEVAZAR"
+CABECALHO_FALSO = "Authorization: Bearer sk-0000FALSO1111TOKEN2222"
+CORPO_FALSO = '{"error":{"message":"quota exceeded","request_id":"req_FALSO_9999"}}'
+FRAGMENTO_PROMPT = "trecho do prompt: a startup usa modelos de linguagem"
+URL_FALSA = "https://integrate.api.nvidia.com/v1/embeddings?api_key=" + CHAVE_FALSA
+
+VALORES_PROIBIDOS = (
+    CHAVE_FALSA,
+    CABECALHO_FALSO,
+    CORPO_FALSO,
+    FRAGMENTO_PROMPT,
+    URL_FALSA,
+    "quota exceeded",
+    "req_FALSO_9999",
+    "Bearer",
+)
+
+
+class ErroDeTerceiroHostil(Exception):
+    """Exceção de biblioteca externa carregando tudo o que não pode vazar."""
+
+    def __init__(self):
+        super().__init__(
+            f"HTTP 429 em {URL_FALSA} | {CABECALHO_FALSO} | corpo={CORPO_FALSO} "
+            f"| {FRAGMENTO_PROMPT}"
+        )
+        self.status_code = 429
+        self.response = SimpleNamespace(status_code=429, text=CORPO_FALSO)
+
+
+def _texto_exposto(excecao: BaseException) -> str:
+    """Mensagem do projeto mais o traceback encadeado que o operador veria."""
+    return str(excecao) + "".join(
+        traceback.format_exception(type(excecao), excecao, excecao.__traceback__)
+    )
+
+
+def _assertar_sem_vazamento(texto: str) -> None:
+    for proibido in VALORES_PROIBIDOS:
+        assert proibido not in texto, f"vazou {proibido!r}"
+
+
+def test_embedding_de_passagem_nao_vaza_corpo_de_terceiro():
+    stub = ClienteEmbeddingStub(erro=ErroDeTerceiroHostil())
+    provedor = ProvedorEmbeddingNvidia(dimensao=4, cliente=stub)
+
+    with pytest.raises(ErroProvedorEmbedding) as capturado:
+        provedor.embutir_passagens(["texto"])
+
+    _assertar_sem_vazamento(_texto_exposto(capturado.value))
+    assert capturado.value.operacional is True
+    assert "429" in str(capturado.value)
+
+
+def test_embedding_de_consulta_nao_vaza_corpo_de_terceiro():
+    stub = ClienteEmbeddingStub(erro=ErroDeTerceiroHostil())
+    provedor = ProvedorEmbeddingNvidia(dimensao=4, cliente=stub)
+
+    with pytest.raises(ErroProvedorEmbedding) as capturado:
+        provedor.embutir_consulta("texto")
+
+    _assertar_sem_vazamento(_texto_exposto(capturado.value))
+
+
+def test_reranker_nvidia_nao_vaza_corpo_de_terceiro():
+    class ClienteRerankHostil:
+        top_n = 0
+
+        def compress_documents(self, documentos, consulta):
+            raise ErroDeTerceiroHostil()
+
+    provedor = ProvedorRerankNvidia(cliente=ClienteRerankHostil())
+
+    with pytest.raises(ErroProvedorRerank) as capturado:
+        provedor.reordenar("consulta", ["a", "b"])
+
+    _assertar_sem_vazamento(_texto_exposto(capturado.value))
+    assert capturado.value.operacional is True
+
+
+def test_contrato_violado_do_reranker_nao_vaza_metadado_de_terceiro():
+    class ClienteRerankSemScore:
+        top_n = 0
+
+        def compress_documents(self, documentos, consulta):
+            return [
+                SimpleNamespace(metadata={"indice": 0, "segredo": CHAVE_FALSA}),
+            ]
+
+    provedor = ProvedorRerankNvidia(cliente=ClienteRerankSemScore())
+
+    with pytest.raises(ErroProvedorRerank) as capturado:
+        provedor.reordenar("consulta", ["a"])
+
+    _assertar_sem_vazamento(_texto_exposto(capturado.value))
+    # falha de contrato não é indisponibilidade: a distinção precisa sobreviver
+    assert capturado.value.operacional is False
+
+
+def test_a_causa_encadeada_nao_reaparece_no_traceback_comum():
+    stub = ClienteEmbeddingStub(erro=ErroDeTerceiroHostil())
+    provedor = ProvedorEmbeddingNvidia(dimensao=4, cliente=stub)
+
+    with pytest.raises(ErroProvedorEmbedding) as capturado:
+        provedor.embutir_consulta("texto")
+
+    excecao = capturado.value
+    assert excecao.__cause__ is None
+    assert excecao.__suppress_context__ is True
+
+
+def test_o_boundary_nao_registra_corpo_de_terceiro_em_log(caplog):
+    stub = ClienteEmbeddingStub(erro=ErroDeTerceiroHostil())
+    provedor = ProvedorEmbeddingNvidia(dimensao=4, cliente=stub)
+
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(ErroProvedorEmbedding):
+            provedor.embutir_consulta("texto")
+
+    _assertar_sem_vazamento(caplog.text)
+
+
+def test_a_saida_do_comando_de_ingestao_nao_vaza_corpo_de_terceiro(
+    capsys, monkeypatch
+):
+    """O caminho real do script, com o provedor falhando de forma hostil.
+
+    Exercita ``ingerir_completo`` de verdade: o ``print`` da linha de falha é o
+    ponto que levava a mensagem do adaptador ao console do operador.
+    """
+    from scripts import ingerir_conhecimento
+
+    def provedor_hostil(*_args, **_kwargs):
+        raise ErroProvedorEmbedding(
+            _descrever_falha_de_provedor(
+                "falha ao inicializar o provedor de embedding", ErroDeTerceiroHostil()
+            ),
+            operacional=True,
+        ) from None
+
+    # sem ler o .env real e sem tocar a rede
+    monkeypatch.setattr(ingerir_conhecimento, "load_dotenv", lambda *_a, **_k: None)
+    monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste-nao-usada")
+    monkeypatch.setattr(
+        ingerir_conhecimento, "ProvedorEmbeddingNvidia", provedor_hostil
+    )
+
+    codigo = ingerir_conhecimento.ingerir_completo()
+
+    assert codigo == 2
+    saida = capsys.readouterr().out
+    assert "FALHA NA INGEST" in saida
+    _assertar_sem_vazamento(saida)

@@ -8,6 +8,12 @@ from pydantic import ValidationError
 
 from radar.agentes.extractor import ErroExtractor, Extractor
 from radar.base_startups import BaseStartups, inicializar_banco
+from radar.provedores import falha_operacional
+from tests.conftest import (
+    CORPO_BRUTO_DO_PROVEDOR,
+    ProvedorSequencial,
+    exigir_falha_neutra_de_provedor,
+)
 from radar.contratos import (
     Classificacao,
     DocumentoRecuperado,
@@ -177,6 +183,7 @@ def perfil_valido(controlada: BaseControlada, **ajustes) -> dict:
                 "polaridade": "presenca",
                 "id_documento": controlada.ids["site"],
                 "trecho_citado": TRECHO_DADOS,
+                "sinais_tecnicos": ["visao_computacional"],
             },
             {
                 "id_afirmacao": 2,
@@ -185,6 +192,7 @@ def perfil_valido(controlada: BaseControlada, **ajustes) -> dict:
                 "polaridade": "neutro",
                 "id_documento": controlada.ids["site"],
                 "trecho_citado": TRECHO_ESCALA,
+                "sinais_tecnicos": ["dados_em_escala"],
             },
             {
                 "id_afirmacao": 3,
@@ -198,23 +206,6 @@ def perfil_valido(controlada: BaseControlada, **ajustes) -> dict:
     }
     bruto.update(ajustes)
     return bruto
-
-
-class ProvedorSequencial:
-    def __init__(self, *respostas):
-        self.respostas = list(respostas)
-        self.chamadas: list[list[tuple[str, str]]] = []
-
-    def invocar(self, mensagens):
-        self.chamadas.append(mensagens)
-        resposta = self.respostas.pop(0)
-        if isinstance(resposta, Exception):
-            raise resposta
-        return resposta
-
-    @property
-    def ultimo_prompt(self) -> str:
-        return "\n".join(texto for _, texto in self.chamadas[-1])
 
 
 # --------------------------------------------------------------------------
@@ -688,3 +679,69 @@ def test_modo_estrito_e_o_mesmo_predicado_de_r2():
             )
             is esperado
         )
+
+
+# --------------------------------------------------------------------------
+# Falha segura: a mensagem não nomeia o provedor
+# --------------------------------------------------------------------------
+
+
+def test_queda_do_provedor_nao_nomeia_gemini_nem_groq(controlada):
+    provedor = ProvedorSequencial(ConnectionError(CORPO_BRUTO_DO_PROVEDOR))
+    entrada = estado(controlada)
+
+    with pytest.raises(ErroExtractor) as falha:
+        Extractor(controlada.base, provedor)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhum perfil foi fabricado" in mensagem
+    # O documento-fonte alimenta o prompt, mas nunca a mensagem de falha.
+    assert TRECHO_DADOS not in mensagem
+    assert TEXTO_SITE not in mensagem
+    assert len(provedor.chamadas) == 1
+    assert falha_operacional(falha.value) is True
+    assert "perfil_extraido" not in entrada
+
+
+def test_duas_respostas_fora_do_contrato_nao_nomeiam_o_provedor(controlada):
+    invalido = {"id_startup": controlada.id_startup, "afirmacoes": []}
+    provedor = ProvedorSequencial(invalido, invalido)
+    entrada = estado(controlada)
+
+    with pytest.raises(ErroExtractor) as falha:
+        Extractor(controlada.base, provedor)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "duas vezes fora do contrato estruturado" in mensagem
+    assert "nenhum perfil foi gravado no estado" in mensagem
+    assert TEXTO_SITE not in mensagem
+    assert len(provedor.chamadas) == 2
+    assert falha_operacional(falha.value) is False
+    assert "perfil_extraido" not in entrada
+
+
+def test_erro_pydantic_do_adaptador_falha_sem_nomear_o_provedor(controlada):
+    """A validação do adaptador consome o retry e cai na mesma falha neutra."""
+    try:
+        PerfilExtraido.model_validate(
+            {"id_startup": controlada.id_startup, "afirmacoes": []}
+        )
+    except ValidationError as erro_validacao:
+        falha_do_adaptador = erro_validacao
+    else:  # pragma: no cover - proteção contra alteração acidental do contrato
+        raise AssertionError("o perfil inválido deveria produzir ValidationError")
+
+    provedor = ProvedorSequencial(falha_do_adaptador, falha_do_adaptador)
+    entrada = estado(controlada)
+
+    with pytest.raises(ErroExtractor) as falha:
+        Extractor(controlada.base, provedor)(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhum perfil foi gravado no estado" in mensagem
+    assert len(provedor.chamadas) == 2
+    assert falha_operacional(falha.value) is False
+    assert "perfil_extraido" not in entrada

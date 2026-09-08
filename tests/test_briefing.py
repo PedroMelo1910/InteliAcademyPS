@@ -29,11 +29,14 @@ from radar.contratos import (
     ResultadoRecuperacao,
 )
 from radar.recomendacao import calcular_fit_score
+from radar.provedores import falha_operacional
 from tests.conftest import (
+    CORPO_BRUTO_DO_PROVEDOR,
     ProvedorSequencialFalso,
     afirmacao_validada_falsa,
     citacao_nvidia_falsa,
     contexto_nvidia_falso,
+    exigir_falha_neutra_de_provedor,
     perfil_validado_falso,
     recomendacao_falsa,
 )
@@ -431,7 +434,7 @@ def test_recomendacoes_sao_revalidadas_e_embutidas_sem_reescrita(caminho_banco):
 
 
 def test_recomendacao_fora_do_contrato_no_estado_falha_com_seguranca(caminho_banco):
-    estado = estado_normal(caminho_banco, recomendacoes=[{"gap_enderecado": "x"}])
+    estado = estado_normal(caminho_banco, recomendacoes=[{"identificador_fundamento": "x"}])
     no, provedor = montar_no(caminho_banco, rascunho())
 
     with pytest.raises(ErroBriefing):
@@ -811,7 +814,7 @@ def test_briefing_do_estado_atravessa_a_forma_json_do_checkpoint(caminho_banco):
     assert isinstance(saida["briefing"], dict)
     assert Recomendacao.model_validate(
         saida["briefing"]["recomendacoes"][0]
-    ).gap_enderecado == "distribuicao"
+    ).identificador_fundamento == "distribuicao"
     assert isinstance(
         PerfilValidado.model_validate(
             estado_normal(caminho_banco)["perfil_validado"]
@@ -1295,3 +1298,44 @@ def test_as_tres_causas_preservam_o_contrato_da_variante_insuficiente(
     assert briefing.veredito.tese == (
         "A base disponível não sustenta uma conclusão sobre esta empresa."
     )
+
+
+# ----------------------------------------------------------------------
+# Falha segura: a mensagem não nomeia o provedor
+# ----------------------------------------------------------------------
+
+
+def test_queda_do_provedor_nao_nomeia_gemini_nem_groq(caminho_banco):
+    no, provedor = montar_no(
+        caminho_banco, ConnectionError(CORPO_BRUTO_DO_PROVEDOR)
+    )
+    entrada = estado_normal(caminho_banco)
+
+    with pytest.raises(ErroBriefing) as falha:
+        no(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhum briefing parcial foi gravado no estado" in mensagem
+    assert provedor.chamadas == 1
+    assert falha_operacional(falha.value) is True
+    assert "briefing" not in entrada
+
+
+def test_duas_respostas_fora_do_contrato_nao_nomeiam_o_provedor(caminho_banco):
+    fora_do_contrato = rascunho(pontos=((1,),))
+    no, provedor = montar_no(caminho_banco, fora_do_contrato, fora_do_contrato)
+    entrada = estado_normal(caminho_banco)
+
+    with pytest.raises(ErroBriefing) as falha:
+        no(entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "duas vezes fora do contrato estruturado" in mensagem
+    assert "nenhum briefing foi gravado no estado" in mensagem
+    # A última falha entra resumida em campo e motivo, nunca como corpo cru.
+    assert "Última falha:" in mensagem
+    assert provedor.chamadas == 2
+    assert falha_operacional(falha.value) is False
+    assert "briefing" not in entrada

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -9,12 +10,11 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from radar.agentes.roteadores import rotear_r1
-from radar.base_startups import BaseStartups, inicializar_banco
+from radar.base_startups import BaseStartups, preparar_cache_analises
 from radar.conhecimento_nvidia import ConhecimentoNvidia
 from radar.configuracao import (
     CAMINHO_BANCO,
     CAMINHO_CHECKPOINTS,
-    CAMINHO_DADOS_CURADOS,
     ErroConfiguracao,
     RAIZ_PROJETO,
 )
@@ -41,6 +41,12 @@ from radar.provedores import (
     ProvedorGeminiPerfilExtraido,
     ProvedorGeminiPlanoConsulta,
     ProvedorGeminiRecomendacaoRascunho,
+    ProvedorGroqBriefingRascunho,
+    ProvedorGroqClassificacao,
+    ProvedorGroqPerfilExtraido,
+    ProvedorGroqPlanoConsulta,
+    ProvedorGroqRecomendacaoRascunho,
+    compor_com_reserva,
     ProvedorPerfilExtraido,
     ProvedorPlanoConsulta,
     ProvedorRecomendacaoRascunho,
@@ -272,7 +278,20 @@ def criar_aplicacao(
     provedor_briefing: ProvedorBriefingRascunho | None = None,
     relogio: Callable[[], date] | None = None,
 ) -> AplicacaoRadar:
-    inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
+    # A base curada é estática em execução (§4.2) e ``aplicacao`` só orquestra
+    # e exibe (§9.1): abrir a tela lê o banco, nunca o reconstrói. Semear aqui
+    # refazia o upsert das startups e dos documentos e reconstruía o índice FTS
+    # a cada boot do Streamlit — escrita no caminho de leitura, capaz de
+    # colidir com um lote em andamento. O seed pertence ao comando explícito.
+    if not caminho_banco.exists():
+        raise ErroConfiguracao(
+            "dados/radar.db não existe; execute primeiro "
+            "python -m scripts.inicializar_base"
+        )
+    try:
+        preparar_cache_analises(caminho_banco)
+    except (sqlite3.DatabaseError, ValueError) as erro:
+        raise ErroConfiguracao(str(erro)) from erro
     injetados = (
         provedor,
         provedor_extracao,
@@ -304,9 +323,34 @@ def criar_aplicacao(
                 "O caminho aderente consulta a base de conhecimento NVIDIA; "
                 "adicione a chave e reinicie a aplicação."
             )
-        provedor = ProvedorGeminiPlanoConsulta(api_key)
-        provedor_extracao = ProvedorGeminiPerfilExtraido(api_key)
-        provedor_classificacao = ProvedorGeminiClassificacao(api_key)
+        # Gemini é o primário. A reserva Groq só entra quando GROQ_API_KEY
+        # existe; sem ela, `compor_com_reserva` devolve o próprio provedor
+        # Gemini e o comportamento fica idêntico ao de hoje.
+        chave_reserva = os.getenv("GROQ_API_KEY", "").strip()
+
+        def com_reserva(primario, fabrica, fronteira):
+            return compor_com_reserva(
+                primario,
+                fabrica,
+                fronteira=fronteira,
+                chave_reserva=chave_reserva,
+            )
+
+        provedor = com_reserva(
+            ProvedorGeminiPlanoConsulta(api_key),
+            ProvedorGroqPlanoConsulta,
+            "query_planner",
+        )
+        provedor_extracao = com_reserva(
+            ProvedorGeminiPerfilExtraido(api_key),
+            ProvedorGroqPerfilExtraido,
+            "extractor",
+        )
+        provedor_classificacao = com_reserva(
+            ProvedorGeminiClassificacao(api_key),
+            ProvedorGroqClassificacao,
+            "classifier",
+        )
         # A composição de reranking aprovada no Entregável 2 é reusada como
         # está: NVIDIA primário e fallback listwise no backbone LLM.
         consultor_nvidia = ConhecimentoNvidia(
@@ -317,8 +361,16 @@ def criar_aplicacao(
                 ProvedorRerankListwiseGemini(api_key),
             ),
         )
-        provedor_recomendacao = ProvedorGeminiRecomendacaoRascunho(api_key)
-        provedor_briefing = ProvedorGeminiBriefingRascunho(api_key)
+        provedor_recomendacao = com_reserva(
+            ProvedorGeminiRecomendacaoRascunho(api_key),
+            ProvedorGroqRecomendacaoRascunho,
+            "recommendation",
+        )
+        provedor_briefing = com_reserva(
+            ProvedorGeminiBriefingRascunho(api_key),
+            ProvedorGroqBriefingRascunho,
+            "briefing",
+        )
     assert (
         provedor is not None
         and provedor_extracao is not None

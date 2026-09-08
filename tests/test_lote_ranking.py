@@ -76,11 +76,12 @@ def _perfil_extraido(base: BaseStartups, startup_id: int, *, literal: bool = Tru
         afirmacoes=[
             {
                 "id_afirmacao": 1,
-                "texto": "A empresa oferece um produto tecnológico documentado.",
+                "texto": "A empresa oferece modelos de linguagem documentados.",
                 "categoria": "workflow_profundo",
                 "polaridade": "presenca",
                 "id_documento": documento.id_documento,
                 "trecho_citado": trecho,
+                "sinais_tecnicos": ["inferencia_llm"],
             }
         ],
     )

@@ -68,7 +68,7 @@ class RerankConstante:
         return [self.valor] * len(textos)
 
 
-class RerankExplosivo:
+class RerankIndisponivel:
     def reordenar(self, consulta, textos):
         raise ErroProvedorRerank("indisponível nos dois provedores", operacional=True)
 
@@ -76,6 +76,13 @@ class RerankExplosivo:
 class RerankComQuantidadeErrada:
     def reordenar(self, consulta, textos):
         return [1.0]
+
+
+class RerankRebaixaRiva:
+    """Simula um reranker que jogaria todos os chunks Riva para fora do top 6."""
+
+    def reordenar(self, consulta, textos):
+        return [0.0 if "Riva" in texto else 1.0 for texto in textos]
 
 
 @pytest.fixture
@@ -211,8 +218,19 @@ def test_scores_iguais_no_rerank_preservam_a_ordem_da_fusao(caminho_kb):
     assert [trecho.id_chunk for trecho in contexto.trechos] == esperados
 
 
+def test_tecnologia_explicitamente_solicitada_tem_cobertura_no_top_final(caminho_kb):
+    kb = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), RerankRebaixaRiva())
+
+    contexto = kb.consultar(
+        "voz; tecnologias NVIDIA candidatas pela regra: NVIDIA Riva"
+    )
+
+    assert len(contexto.trechos) == N_TRECHOS_FINAL
+    assert any(trecho.tecnologia == "NVIDIA Riva" for trecho in contexto.trechos)
+
+
 def test_falha_do_rerank_propaga_sem_devolver_ordem_da_fusao(caminho_kb):
-    kb = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), RerankExplosivo())
+    kb = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), RerankIndisponivel())
     with pytest.raises(ErroProvedorRerank):
         kb.consultar("qualquer consulta")
 
@@ -251,3 +269,113 @@ def test_consulta_falha_com_erro_claro_quando_ha_menos_de_cinco_chunks(tmp_path)
     kb = ConhecimentoNvidia(caminho, EmbeddingFalso(), RerankFalso())
     with pytest.raises(ErroConsultaNvidia, match="ao menos 5"):
         kb.consultar("dados na GPU")
+
+
+# ----------------------------------------------------------------------
+# A reserva de cobertura vale uma posição, não metade do pool
+# ----------------------------------------------------------------------
+#
+# A arquitetura (§5.5, §6.1b) descreve UMA guarda de cobertura, aplicada DEPOIS
+# do reranking, reservando no máximo uma posição. A implementação anterior
+# injetava, ANTES do reranking, uma semente por tecnologia candidata: um único
+# gap estrutural chegava a nove sementes e quatro gaps a quinze, de um pool de
+# vinte. O reranker passava a ver um conjunto decidido pela tabela
+# determinística, não pela busca híbrida.
+
+import radar.conhecimento_nvidia.consulta as consulta_nvidia
+
+
+def _pool_hibrido(quantidade: int = N_CANDIDATOS_RERANK) -> list[int]:
+    """Pool saturado da fusão híbrida, com ids que não colidem com sementes."""
+    return list(range(100, 100 + quantidade))
+
+
+def _reservar(candidatos, sementes):
+    return consulta_nvidia._reservar_cobertura_pre_rerank(candidatos, sementes)
+
+
+def test_uma_tecnologia_nao_toma_varias_vagas_do_pool():
+    hibridos = _pool_hibrido()
+    # nove sementes, como a união de tecnologias de um único gap estrutural
+    sementes = list(range(1, 10))
+
+    resultado = _reservar(hibridos, sementes)
+
+    assert len(resultado) == N_CANDIDATOS_RERANK
+    preservados = [item for item in resultado if item in hibridos]
+    assert len(preservados) >= N_CANDIDATOS_RERANK - 1
+    assert len([item for item in resultado if item in sementes]) <= 1
+
+
+def test_muitas_tecnologias_nao_substituem_a_maioria_do_pool():
+    hibridos = _pool_hibrido()
+    # quinze sementes, como a união de quatro gaps confirmados
+    sementes = list(range(1, 16))
+
+    resultado = _reservar(hibridos, sementes)
+
+    assert len([item for item in resultado if item in sementes]) <= 1
+    assert len([item for item in resultado if item in hibridos]) >= 19
+
+
+def test_sem_reserva_quando_a_busca_hibrida_ja_cobriu():
+    hibridos = _pool_hibrido()
+    # a primeira semente já foi recuperada normalmente pela busca híbrida
+    sementes = [hibridos[3], 1, 2, 3]
+
+    assert _reservar(hibridos, sementes) == hibridos
+
+
+def test_pool_sem_sementes_e_a_fusao_hibrida_pura():
+    hibridos = _pool_hibrido(30)
+
+    assert _reservar(hibridos, []) == hibridos[:N_CANDIDATOS_RERANK]
+
+
+def test_reserva_nunca_ultrapassa_o_teto_do_pool():
+    assert len(_reservar(_pool_hibrido(30), list(range(1, 16)))) == N_CANDIDATOS_RERANK
+
+
+def test_reserva_e_deterministica():
+    hibridos = _pool_hibrido()
+    sementes = list(range(1, 10))
+
+    assert _reservar(hibridos, sementes) == _reservar(hibridos, sementes)
+
+
+class RerankEspiao:
+    """Registra quantos textos o reranker realmente recebeu."""
+
+    def __init__(self):
+        self.tamanhos: list[int] = []
+
+    def reordenar(self, consulta, textos):
+        self.tamanhos.append(len(textos))
+        return [float(len(textos) - indice) for indice in range(len(textos))]
+
+
+def test_o_reranker_recebe_o_pool_limitado_da_busca_hibrida(caminho_kb):
+    espiao = RerankEspiao()
+    kb = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), espiao)
+
+    kb.consultar(
+        "inferência com NVIDIA Triton Inference Server, NVIDIA Riva e NVIDIA RAPIDS"
+    )
+
+    assert espiao.tamanhos
+    assert all(tamanho <= N_CANDIDATOS_RERANK for tamanho in espiao.tamanhos)
+
+
+def test_a_guarda_pos_rerank_troca_no_maximo_uma_posicao_final(caminho_kb):
+    kb_neutra = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), RerankConstante())
+    sem_guarda = kb_neutra.consultar("serviços AI-native e wrappers de LLM")
+
+    kb_guarda = ConhecimentoNvidia(caminho_kb, EmbeddingFalso(), RerankRebaixaRiva())
+    com_guarda = kb_guarda.consultar("NVIDIA Riva para transcrição de chamadas")
+
+    assert len(com_guarda.trechos) == len(sem_guarda.trechos) == N_TRECHOS_FINAL
+    # a guarda existe para preservar lastro técnico, e continua preservando
+    assert any(
+        trecho.origem == "tecnologia" and trecho.tecnologia is not None
+        for trecho in com_guarda.trechos
+    )

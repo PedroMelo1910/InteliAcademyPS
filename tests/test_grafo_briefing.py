@@ -20,6 +20,7 @@ from radar.agentes.briefing import ErroBriefing
 from radar.agentes.extractor import Extractor
 from radar.agentes.recommendation import ErroRecommendation
 from radar.agentes.retriever import Retriever
+from radar.configuracao import MINIMO_CANDIDATAS_UTEIS
 from radar.aplicacao import ErroAplicacao, criar_aplicacao
 from radar.base_startups import BaseStartups
 from radar.contratos import (
@@ -30,6 +31,7 @@ from radar.contratos import (
 from radar.grafo import montar_grafo
 from tests.conftest import (
     ConsultorNvidiaFalso,
+    ProvedorFixo,
     ProvedorSequencialFalso,
 )
 
@@ -45,20 +47,6 @@ TRAJETO_ATE_R3 = (
 )
 TRAJETO_NORMAL = TRAJETO_ATE_R3 + ("nvidia_rag", "recommendation", "briefing")
 TRAJETO_BYPASS = TRAJETO_ATE_R3 + ("briefing",)
-
-
-class ProvedorFixo:
-    def __init__(self, resposta):
-        self.resposta = resposta
-        self.chamadas = 0
-        self.mensagens = []
-
-    def invocar(self, mensagens):
-        self.chamadas += 1
-        self.mensagens.append(mensagens)
-        if isinstance(self.resposta, Exception):
-            raise self.resposta
-        return self.resposta
 
 
 def plano_caju():
@@ -122,7 +110,8 @@ def classificacao(classe="AI-enabled"):
 
 def rascunho_recomendacao(ids_afirmacoes=(1,)):
     return {
-        "gap_enderecado": "distribuicao",
+        "tipo_fundamento": "gap_confirmado",
+        "identificador_fundamento": "distribuicao",
         "tecnologias": ["NVIDIA Inception"],
         "justificativa_tecnica": (
             "O programa abre acesso a suporte técnico e créditos de computação."
@@ -135,7 +124,7 @@ def rascunho_recomendacao(ids_afirmacoes=(1,)):
             "detalhe": "Enviar o convite de admissão ao programa nesta semana.",
         },
         "ids_afirmacoes": list(ids_afirmacoes),
-        "ids_chunks": [101],
+        "ids_chunks": [107],
     }
 
 
@@ -540,11 +529,20 @@ def test_jornada_offline_completa_descobre_e_depois_aprofunda(
     )
 
     assert descoberta.rota == "candidatas_prontas"
-    assert [item.empresa.nome for item in descoberta.ranking] == ["Caju"]
-    assert descoberta.trajeto == ("query_planner", "retriever")
+    nomes = [item.empresa.nome for item in descoberta.ranking]
+    assert "Caju" in nomes
+    assert len(nomes) >= MINIMO_CANDIDATAS_UTEIS, (
+        "a descoberta precisa entregar ranking comparável, não um nome só"
+    )
+    assert descoberta.trajeto[:2] == ("query_planner", "retriever")
     assert descoberta.consulta == "fintech brasileira de benefícios com cartão"
 
-    escolhida = descoberta.ranking[0].empresa.id_startup
+    # O clique da jornada é na Caju, não na primeira linha por acaso.
+    escolhida = next(
+        item.empresa.id_startup
+        for item in descoberta.ranking
+        if item.empresa.nome == "Caju"
+    )
     aprofundamento = aplicacao.executar_aprofundamento(descoberta, escolhida)
 
     briefing = aprofundamento.briefing

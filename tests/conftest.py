@@ -151,7 +151,13 @@ def trecho_nvidia_falso(
 
 
 def contexto_nvidia_falso(consulta: str = "consulta NVIDIA de teste"):
-    """Contexto com 5 chunks de tecnologia e 1 conceitual, dentro da faixa 5–8."""
+    """Contexto rico: 7 chunks de tecnologia e 1 conceitual, no teto da faixa 5–8.
+
+    É deliberadamente farto para que as fixtures do caminho feliz tenham
+    lastro real de tecnologia. Quando a **escassez** é o comportamento sob
+    teste, use ``contexto_nvidia_escasso`` — este aqui cobre os seis gaps do
+    contrato e não consegue exercitar interseção vazia.
+    """
     from radar.contratos import ContextoNvidia
 
     trechos = [
@@ -160,6 +166,32 @@ def contexto_nvidia_falso(consulta: str = "consulta NVIDIA de teste"):
         trecho_nvidia_falso(103, tecnologia="TensorRT-LLM", score_rerank=0.85),
         trecho_nvidia_falso(104, tecnologia="NeMo Guardrails", score_rerank=0.8),
         trecho_nvidia_falso(105, tecnologia="NVIDIA RAPIDS", score_rerank=0.75),
+        trecho_nvidia_falso(107, tecnologia="NVIDIA Inception", score_rerank=0.72),
+        trecho_nvidia_falso(108, tecnologia="NVIDIA Riva", score_rerank=0.71),
+        trecho_nvidia_falso(
+            106, tecnologia=None, topico="ai-native-services", score_rerank=0.7
+        ),
+    ]
+    return ContextoNvidia(consulta_gerada=consulta, trechos=trechos)
+
+
+def contexto_nvidia_escasso(consulta: str = "consulta NVIDIA escassa"):
+    """Contexto pobre de propósito: sem NVIDIA Morpheus e sem AI Enterprise.
+
+    Existe para exercitar o ramo em que um fundamento sustentado por evidência
+    não encontra **nenhuma** tecnologia candidata entre os trechos recuperados.
+    O sinal ``ciberseguranca_em_escala`` tem exatamente essas duas candidatas,
+    então a interseção com este contexto é vazia por construção.
+    """
+    from radar.contratos import ContextoNvidia
+
+    trechos = [
+        trecho_nvidia_falso(101, tecnologia="NVIDIA NIM", score_rerank=0.95),
+        trecho_nvidia_falso(
+            102, tecnologia="NVIDIA Triton Inference Server", score_rerank=0.9
+        ),
+        trecho_nvidia_falso(103, tecnologia="TensorRT-LLM", score_rerank=0.85),
+        trecho_nvidia_falso(105, tecnologia="NVIDIA RAPIDS", score_rerank=0.8),
         trecho_nvidia_falso(
             106, tecnologia=None, topico="ai-native-services", score_rerank=0.7
         ),
@@ -189,6 +221,7 @@ def afirmacao_validada_falsa(
     id_documento: int | None = None,
     texto: str | None = None,
     motivo: str | None = None,
+    sinais_tecnicos=(),
 ):
     """``AfirmacaoValidada`` mínima e coerente com as regras de polaridade."""
     from radar.contratos import AfirmacaoValidada
@@ -202,6 +235,7 @@ def afirmacao_validada_falsa(
         polaridade=polaridade,
         id_documento=id_documento if id_documento is not None else id_afirmacao,
         trecho_citado=trecho_citado_falso(id_afirmacao),
+        sinais_tecnicos=tuple(sinais_tecnicos),
         situacao=situacao,
         motivo=(
             None
@@ -249,6 +283,63 @@ def perfil_validado_falso(itens, hosts: list[str] | None = None):
         hosts_distintos=sorted(hosts if hosts is not None else ["fonte-a.example"]),
         estado_dimensoes_gap=estados,
     )
+
+
+# ----------------------------------------------------------------------
+# Dublês de provedor de structured output
+#
+# Três dublês, três formas de asserção — deliberadamente distintos:
+#
+# * ``ProvedorFixo``            — uma resposta só, repetida em toda chamada.
+# * ``ProvedorSequencial``      — ``chamadas`` é a **lista de mensagens**, e
+#                                 ``ultimo_prompt`` junta o texto da última.
+# * ``ProvedorSequencialFalso`` — ``chamadas`` é um **contador**, as mensagens
+#                                 ficam em ``mensagens`` e o esgotamento vira
+#                                 ``AssertionError`` em vez de ``IndexError``.
+#
+# Quem assere ``len(provedor.chamadas) == 2`` usa o segundo; quem assere
+# ``provedor.chamadas == 2`` usa o terceiro.
+# ----------------------------------------------------------------------
+
+
+class ProvedorFixo:
+    """Sempre a mesma resposta; um item ``Exception`` é levantado.
+
+    A guarda de ``Exception`` existe para que um provedor injetado como "este
+    nó não pode ser chamado" exploda no ponto da chamada, em vez de devolver a
+    exceção como valor e falhar depois, com diagnóstico pior.
+    """
+
+    def __init__(self, resposta):
+        self.resposta = resposta
+        self.chamadas = 0
+        self.mensagens = []
+
+    def invocar(self, mensagens):
+        self.chamadas += 1
+        self.mensagens.append(mensagens)
+        if isinstance(self.resposta, Exception):
+            raise self.resposta
+        return self.resposta
+
+
+class ProvedorSequencial:
+    """Uma resposta programada por chamada; ``chamadas`` guarda as mensagens."""
+
+    def __init__(self, *respostas):
+        self.respostas = list(respostas)
+        self.chamadas: list[list[tuple[str, str]]] = []
+
+    def invocar(self, mensagens):
+        self.chamadas.append(mensagens)
+        resposta = self.respostas.pop(0)
+        if isinstance(resposta, Exception):
+            raise resposta
+        return resposta
+
+    @property
+    def ultimo_prompt(self) -> str:
+        return "\n".join(texto for _, texto in self.chamadas[-1])
 
 
 class ProvedorSequencialFalso:
@@ -317,9 +408,15 @@ def recomendacao_falsa(
     """
     from radar.contratos import EvidenciaStartup, ProximaAcao, Recomendacao
 
+    from radar.contratos import GAPS_ENDERECAVEIS
+
     return Recomendacao(
-        gap_enderecado=gap,
-        tecnologias=tecnologias or ["NVIDIA Inception"],
+        tipo_fundamento=(
+            "gap_confirmado" if gap in GAPS_ENDERECAVEIS else "oportunidade_confirmada"
+        ),
+        identificador_fundamento=gap,
+        # o padrão acompanha o chunk 101 para a citação ter lastro real
+        tecnologias=tecnologias or ["NVIDIA NIM"],
         justificativa_tecnica="O programa abre acesso a suporte técnico dedicado.",
         justificativa_negocio="A validação encurta o ciclo de venda enterprise.",
         prioridade="media",
@@ -430,3 +527,103 @@ def briefing_normal_falso(**ajustes):
     }
     campos.update(ajustes)
     return Briefing(**campos)
+
+
+def briefing_nao_aderente_falso(**ajustes):
+    """``Briefing`` da variante non-AI: score zero real e nenhuma recomendação."""
+    from radar.contratos import ConclusaoAncorada, VereditoBriefing
+
+    campos = {
+        "variante": "nao_aderente",
+        "veredito": VereditoBriefing(
+            classe="non-AI",
+            fit_score_total=0,
+            tese="A base pública não descreve uso de IA no produto vendido.",
+            ids_afirmacoes_suporte=[1],
+        ),
+        "pontos_de_conversa": [
+            ConclusaoAncorada(
+                texto="Confirmar se há projeto de IA fora do material público.",
+                ids_afirmacoes_suporte=[1],
+            )
+        ],
+        "recomendacoes": [],
+        "avisos": [
+            "Veredito non-AI: a stack NVIDIA não é recomendada para esta empresa."
+        ],
+        "rodape": rodape_falso(rota_r3="nao_aderente"),
+    }
+    campos.update(ajustes)
+    return briefing_normal_falso(**campos)
+
+
+def briefing_insuficiente_falso(**ajustes):
+    """``Briefing`` sem classe, sem score, sem pontos e sem fontes (§11.3)."""
+    from radar.contratos import ConclusaoAncorada, VereditoBriefing
+
+    campos = {
+        "variante": "evidencia_insuficiente",
+        "veredito": VereditoBriefing(
+            classe=None,
+            fit_score_total=None,
+            tese="A base disponível não sustenta uma conclusão sobre a empresa.",
+            ids_afirmacoes_suporte=[],
+        ),
+        "sintese_executiva": ConclusaoAncorada(
+            texto="Nenhuma afirmação sobreviveu à conferência de proveniência.",
+            ids_afirmacoes_suporte=[],
+        ),
+        "pontos_de_conversa": [],
+        "recomendacoes": [],
+        "fontes": [],
+        "avisos": ["Evidência insuficiente: nenhuma afirmação confirmada."],
+        "rodape": rodape_falso(
+            afirmacoes_confirmadas=0,
+            afirmacoes_derrubadas=2,
+            rota_r3="evidencia_insuficiente",
+        ),
+    }
+    campos.update(ajustes)
+    return briefing_normal_falso(**campos)
+
+
+# --------------------------------------------------------------------------
+# Falha segura na fronteira do agente: mensagem sem nome de provedor
+# --------------------------------------------------------------------------
+
+# Corpo cru de terceiro, com chave embutida, injetado nas falhas operacionais
+# dos testes de mensagem neutra. Nada daqui pode alcançar o texto final.
+CORPO_BRUTO_DO_PROVEDOR = (
+    '{"error":{"status":"UNAVAILABLE","message":"backend sobrecarregado",'
+    '"apiKey":"AIzaSyD-CHAVE-FALSA-QUE-NAO-PODE-VAZAR"}}'
+)
+
+# Chave, corpo cru e instrução de sistema: o que a falha segura nunca repete.
+TERMOS_QUE_A_FALHA_SEGURA_NAO_REPETE = (
+    "AIzaSyD-CHAVE-FALSA-QUE-NAO-PODE-VAZAR",
+    "apiKey",
+    "UNAVAILABLE",
+    "backend sobrecarregado",
+    "Você é o",
+)
+
+
+def exigir_falha_neutra_de_provedor(mensagem: str) -> None:
+    """O nó não observa qual provedor respondeu, logo não pode nomear nenhum.
+
+    Com a reserva Groq ativa, a resposta final pode ter vindo do primário ou da
+    reserva. Dizer "O Gemini" na fronteira do agente afirmaria um fato que o nó
+    não tem como verificar, e ficaria factualmente errado toda vez que a
+    reserva atendesse. Nomear a reserva teria o mesmo defeito. A composição,
+    os adaptadores e o log da fronteira de fallback seguem nomeando os
+    provedores, porque lá a identidade é observada de fato.
+    """
+    assert "O provedor de IA" in mensagem, mensagem
+    for nome in ("Gemini", "Groq"):
+        assert nome not in mensagem, (
+            f"a fronteira do agente nomeou {nome} sem poder saber disso: {mensagem}"
+        )
+    for termo in TERMOS_QUE_A_FALHA_SEGURA_NAO_REPETE:
+        assert termo not in mensagem, (
+            f"a falha segura repetiu conteúdo que não pode sair do nó: {termo}"
+        )

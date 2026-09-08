@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 import socket
@@ -15,7 +16,9 @@ from radar.configuracao import (
     DIMENSAO_EMBEDDING_NVIDIA,
     MODELO_EMBEDDING_NVIDIA,
     MODELO_GEMINI,
+    MODELO_GROQ,
     MODELO_RERANK_NVIDIA,
+    REQUISICOES_GROQ_POR_SEGUNDO,
 )
 from radar.contratos import (
     BriefingRascunho,
@@ -42,6 +45,9 @@ _CHAVES_JSON_SCHEMA_GEMINI = frozenset(
         "required",
     }
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _schema_json_compativel_gemini(contrato: type[BaseModel]) -> dict[str, Any]:
@@ -241,6 +247,251 @@ class ProvedorGeminiBriefingRascunho:
         return self._estruturado.invoke(mensagens)
 
 
+# ----------------------------------------------------------------------
+# Reserva operacional: Groq atrás dos mesmos protocolos
+# ----------------------------------------------------------------------
+#
+# O Gemini continua sendo o provedor primário. O Groq só é chamado quando a
+# chamada primária falha por **indisponibilidade** — nunca por erro de
+# contrato. A reserva atravessa exatamente a mesma validação Pydantic do nó:
+# ela não relaxa contrato, não pula conferência de evidência literal, não
+# aumenta teto de retry e não muda a falha segura.
+
+
+class ErroProvedoresIndisponiveis(RuntimeError):
+    """Primário e reserva indisponíveis; nada foi fabricado no lugar."""
+
+    # Lido por ``falha_operacional``: esta é indisponibilidade, não defeito.
+    operacional = True
+
+
+class ErroReservaIncompativel(RuntimeError):
+    """A reserva falhou por contrato, schema ou defeito — não por queda.
+
+    Chamar isso de indisponibilidade esconderia um defeito real atrás de um
+    rótulo operacional, e o runner de lote passaria a tratá-lo como algo que
+    "melhora sozinho".
+    """
+
+    operacional = False
+
+
+# Motivo neutro para a falha segura do nó quando a reserva recusa o pedido
+# estruturado. Não nomeia provedor, não carrega código HTTP e não repete
+# corpo de resposta de terceiro.
+MOTIVO_RECUSA_ESTRUTURADA = (
+    "a fronteira de provedores recusou o pedido estruturado"
+)
+
+
+_CODIGOS_SEGUROS_PARA_RELATO = frozenset(
+    {400, 401, 402, 403, 404, 408, 409, 422, 425, 429, 500, 502, 503, 504}
+)
+
+
+def _status_seguro(erro: BaseException) -> int | None:
+    """Só o código numérico; nunca a mensagem ou o corpo da resposta."""
+    candidatos = [getattr(erro, "status_code", None)]
+    resposta = getattr(erro, "response", None)
+    if resposta is not None:
+        candidatos.append(getattr(resposta, "status_code", None))
+    for candidato in candidatos:
+        try:
+            codigo = int(candidato)
+        except (TypeError, ValueError):
+            continue
+        if codigo in _CODIGOS_SEGUROS_PARA_RELATO:
+            return codigo
+    return None
+
+
+def _descrever(classe: str, status: int | None) -> str:
+    return f"{classe}" if status is None else f"{classe} ({status})"
+
+
+def _descrever_falha_de_provedor(operacao: str, erro: BaseException) -> str:
+    """Mensagem única e segura para qualquer falha vinda de SDK de terceiro.
+
+    A fronteira LLM já usava ``_descrever`` + ``_status_seguro``; os adaptadores
+    NVIDIA interpolavam ``str(excecao)`` inteira e encadeavam a original, o que
+    levava corpo de resposta, cabeçalho e credencial para a mensagem e para o
+    traceback. Aqui sobrevivem só três coisas: a operação do projeto, o nome da
+    classe da exceção e um código HTTP de allowlist. Quem levanta deve usar
+    ``from None``, para que a causa não recomponha o corpo no traceback comum.
+    """
+    return f"{operacao}: {_descrever(type(erro).__name__, _status_seguro(erro))}"
+
+
+_LIMITADOR_GROQ: BaseRateLimiter | None = None
+
+
+def limitador_groq() -> BaseRateLimiter:
+    """Limitador único e conservador, compartilhado por todas as fronteiras.
+
+    Uma queda do Gemini joga todo o lote na reserva de uma vez; sem um teto
+    comum, a saída de um provedor viraria estouro de limite no outro.
+    """
+    global _LIMITADOR_GROQ
+    if _LIMITADOR_GROQ is None:
+        from langchain_core.rate_limiters import InMemoryRateLimiter
+
+        _LIMITADOR_GROQ = InMemoryRateLimiter(
+            requests_per_second=REQUISICOES_GROQ_POR_SEGUNDO,
+            check_every_n_seconds=0.5,
+            max_bucket_size=1,
+        )
+    return _LIMITADOR_GROQ
+
+
+def _modelo_groq(api_key: str):
+    """Import tardio: teste offline injeta fake e nunca constrói cliente real."""
+    from langchain_groq import ChatGroq
+
+    return ChatGroq(
+        model=MODELO_GROQ,
+        api_key=api_key,
+        temperature=0,
+        max_retries=1,
+        timeout=60,
+        rate_limiter=limitador_groq(),
+    )
+
+
+def _com_saida_estruturada_groq(modelo, contrato: type[BaseModel]) -> object:
+    """JSON Schema nativo do contrato; a autoridade final segue sendo o nó.
+
+    Devolve dicionário, igual ao adaptador Gemini, para que o mesmo
+    ``model_validate`` do nó continue sendo o único juiz — inclusive do
+    ``extra="forbid"``.
+    """
+    return modelo.with_structured_output(
+        contrato.model_json_schema(), method="json_schema"
+    )
+
+
+class ProvedorGroqPlanoConsulta:
+    def __init__(self, api_key: str):
+        self._estruturado = _com_saida_estruturada_groq(
+            _modelo_groq(api_key), PlanoConsulta
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorGroqPerfilExtraido:
+    def __init__(self, api_key: str):
+        self._estruturado = _com_saida_estruturada_groq(
+            _modelo_groq(api_key), PerfilExtraido
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorGroqClassificacao:
+    def __init__(self, api_key: str):
+        self._estruturado = _com_saida_estruturada_groq(
+            _modelo_groq(api_key), Classificacao
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorGroqRecomendacaoRascunho:
+    def __init__(self, api_key: str):
+        self._estruturado = _com_saida_estruturada_groq(
+            _modelo_groq(api_key), RascunhosRecomendacao
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorGroqBriefingRascunho:
+    def __init__(self, api_key: str):
+        self._estruturado = _com_saida_estruturada_groq(
+            _modelo_groq(api_key), BriefingRascunho
+        )
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        return self._estruturado.invoke(mensagens)
+
+
+class ProvedorComFallback:
+    """Composição única de primário + reserva, reusada pelas cinco fronteiras.
+
+    Uma tentativa em cada, nesta ordem, sem alternância: se o primário devolve,
+    a reserva recebe zero chamadas; se o primário falha por indisponibilidade,
+    a reserva é chamada uma vez; se o primário falha por contrato, o erro sobe
+    intacto e a reserva não é chamada. Como cada agente já faz no máximo duas
+    tentativas de correção estruturada, o teto por fronteira é de **2 chamadas
+    ao primário e 2 à reserva**.
+    """
+
+    def __init__(self, primario, reserva, *, fronteira: str):
+        self.primario = primario
+        self.reserva = reserva
+        self.fronteira = fronteira
+
+    def invocar(self, mensagens: list[tuple[str, str]]) -> object:
+        try:
+            return self.primario.invocar(mensagens)
+        except Exception as erro:
+            if not falha_operacional(erro):
+                # Erro de contrato, de estado ou de programação: quem corrige é
+                # o retry do próprio agente, não outro provedor.
+                raise
+            # Só o que é seguro relatar sai do bloco: classe e código. A
+            # exceção original morre aqui e não vira ``__cause__`` nem
+            # ``__context__`` do erro final.
+            primario_descrito = _descrever(type(erro).__name__, _status_seguro(erro))
+
+        # Observabilidade mínima: fronteira e decisão. Sem prompt, sem
+        # documento, sem resposta, sem chave, sem corpo de erro de terceiro.
+        logger.warning(
+            "fronteira %s: provedor primário indisponível (%s); acionando "
+            "provedor reserva",
+            self.fronteira,
+            primario_descrito,
+        )
+        try:
+            return self.reserva.invocar(mensagens)
+        except Exception as erro_reserva:
+            operacional = falha_operacional(erro_reserva)
+            reserva_descrita = _descrever(
+                type(erro_reserva).__name__, _status_seguro(erro_reserva)
+            )
+
+        # Levantado FORA de qualquer ``except``: sem exceção ativa, o Python não
+        # preenche ``__context__``, e nenhuma mensagem de provedor fica
+        # alcançável por log, relatório de lote ou traceback formatado.
+        if operacional:
+            raise ErroProvedoresIndisponiveis(
+                f"a fronteira {self.fronteira} ficou sem provedor: primário "
+                f"{primario_descrito} e reserva {reserva_descrita}"
+            ) from None
+        raise ErroReservaIncompativel(
+            f"na fronteira {self.fronteira} o primário caiu por "
+            f"{primario_descrito} e a reserva recusou por {reserva_descrita}, "
+            "que não é indisponibilidade"
+        ) from None
+
+
+def compor_com_reserva(primario, fabrica_reserva, *, fronteira: str, chave_reserva: str):
+    """Devolve o primário puro quando não há chave; senão, a composição.
+
+    Sem ``GROQ_API_KEY`` o comportamento fica idêntico ao de hoje — nenhum
+    cliente de reserva é construído.
+    """
+    if not (chave_reserva or "").strip():
+        return primario
+    return ProvedorComFallback(
+        primario, fabrica_reserva(chave_reserva), fronteira=fronteira
+    )
+
+
 class ProvedorContextoNvidia(Protocol):
     def consultar(self, consulta: str) -> object:
         """Recupera trechos NVIDIA; a validação do contrato fica na fronteira do nó.
@@ -391,9 +642,11 @@ class ProvedorEmbeddingNvidia:
                 )
             except Exception as excecao:
                 raise ErroProvedorEmbedding(
-                    f"falha ao inicializar o provedor de embedding: {excecao}",
+                    _descrever_falha_de_provedor(
+                        "falha ao inicializar o provedor de embedding", excecao
+                    ),
                     operacional=falha_operacional(excecao),
-                ) from excecao
+                ) from None
         self._cliente = cliente
         self._dimensao = dimensao
         self._modelo = modelo
@@ -430,9 +683,11 @@ class ProvedorEmbeddingNvidia:
             vetores = self._cliente.embed_documents(textos)
         except Exception as excecao:
             raise ErroProvedorEmbedding(
-                f"falha do provedor de embedding em modo passage: {excecao}",
+                _descrever_falha_de_provedor(
+                    "falha do provedor de embedding em modo passage", excecao
+                ),
                 operacional=falha_operacional(excecao),
-            ) from excecao
+            ) from None
         return self._validar(vetores, len(textos))
 
     def embutir_consulta(self, texto: str) -> list[float]:
@@ -440,9 +695,11 @@ class ProvedorEmbeddingNvidia:
             vetor = self._cliente.embed_query(texto)
         except Exception as excecao:
             raise ErroProvedorEmbedding(
-                f"falha do provedor de embedding em modo query: {excecao}",
+                _descrever_falha_de_provedor(
+                    "falha do provedor de embedding em modo query", excecao
+                ),
                 operacional=falha_operacional(excecao),
-            ) from excecao
+            ) from None
         return self._validar([vetor], 1)[0]
 
 
@@ -463,9 +720,11 @@ class ProvedorRerankNvidia:
                 cliente = NVIDIARerank(model=modelo, nvidia_api_key=api_key)
             except Exception as excecao:
                 raise ErroProvedorRerank(
-                    f"falha ao inicializar o reranker NVIDIA: {excecao}",
+                    _descrever_falha_de_provedor(
+                        "falha ao inicializar o reranker NVIDIA", excecao
+                    ),
                     operacional=falha_operacional(excecao),
-                ) from excecao
+                ) from None
         self._cliente = cliente
 
     def reordenar(self, consulta: str, textos: list[str]) -> list[float]:
@@ -478,9 +737,9 @@ class ProvedorRerankNvidia:
             resultado = self._cliente.compress_documents(documentos, consulta)
         except Exception as excecao:
             raise ErroProvedorRerank(
-                f"falha do reranker NVIDIA: {excecao}",
+                _descrever_falha_de_provedor("falha do reranker NVIDIA", excecao),
                 operacional=falha_operacional(excecao),
-            ) from excecao
+            ) from None
         scores: dict[int, float] = {}
         try:
             for documento in resultado:
@@ -492,9 +751,12 @@ class ProvedorRerankNvidia:
                 scores[indice] = score
         except (AttributeError, KeyError, TypeError, ValueError) as erro:
             raise ErroProvedorRerank(
-                f"resposta do reranker viola o contrato de índices e scores: {erro}",
+                _descrever_falha_de_provedor(
+                    "resposta do reranker viola o contrato de índices e scores",
+                    erro,
+                ),
                 operacional=False,
-            ) from erro
+            ) from None
         if set(scores) != set(range(len(textos))):
             raise ErroProvedorRerank(
                 "resposta do reranker não cobre todos os índices enviados",
@@ -578,9 +840,9 @@ class ProvedorRerankListwiseGemini:
                 )
             except Exception as excecao:
                 raise ErroProvedorRerank(
-                    f"falha do fallback listwise: {excecao}",
+                    _descrever_falha_de_provedor("falha do fallback listwise", excecao),
                     operacional=falha_operacional(excecao),
-                ) from excecao
+                ) from None
             try:
                 ordem = list(OrdenacaoListwise.model_validate(bruto).ordem)
             except (ValidationError, TypeError, ValueError) as erro:

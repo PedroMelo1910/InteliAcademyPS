@@ -24,15 +24,18 @@ from radar.contratos import (
     ResultadoRecuperacao,
     TrechoNvidia,
 )
-from radar.provedores import ProvedorRecomendacaoRascunho, RascunhosRecomendacao
+from radar.provedores import (
+    ErroReservaIncompativel,
+    ProvedorRecomendacaoRascunho,
+    RascunhosRecomendacao,
+)
 from radar.recomendacao import calcular_fit_score
 from radar.regras_recomendacao import (
     CATEGORIAS_DE_DOR,
-    TECNOLOGIAS_POR_GAP,
     calcular_complexidade,
     calcular_prioridade,
-    conferir_gap_sustentado,
-    gaps_sustentados,
+    conferir_fundamento_sustentado,
+    fundamentos_disponiveis,
     tecnologias_candidatas,
 )
 
@@ -49,11 +52,29 @@ class ErroRecommendation(RuntimeError):
     """Falha segura: sem proveniência verificável, nenhuma recomendação é gravada."""
 
 
+def _tecnologias_com_lastro(
+    fundamento: tuple[str, str], contexto: ContextoNvidia
+) -> tuple[str, ...]:
+    """Interseção entre a tabela do fundamento e o que a recuperação trouxe.
+
+    Mantém a ordem da tabela determinística, para que duas execuções iguais
+    produzam o mesmo prompt.
+    """
+    no_contexto = {
+        trecho.tecnologia
+        for trecho in contexto.trechos
+        if trecho.origem == "tecnologia" and trecho.tecnologia is not None
+    }
+    permitidas = tecnologias_candidatas(*fundamento)
+    return tuple(item for item in permitidas if item in no_contexto)
+
+
 class Recommendation:
     """Cruza o perfil validado com o contexto NVIDIA recuperado.
 
     A divisão de trabalho é o ponto central deste nó: o LLM preenche apenas
-    ``RecomendacaoRascunho`` — gap, tecnologias, as duas justificativas, a
+    ``RecomendacaoRascunho`` — o fundamento (gap confirmado ou oportunidade
+    técnica confirmada), tecnologias, as duas justificativas, a
     próxima ação e **ids**. Quem resolve os ids para objetos completos, quem
     calcula prioridade e complexidade e quem chama a função pura de fit-score é
     o nó. Prioridade, complexidade e fit-score sequer existem no schema que o
@@ -112,21 +133,38 @@ class Recommendation:
                 "evidência de startup para sustentar recomendação"
             )
 
-        # Elegibilidade vem antes do provedor e antes do fit-score: sem gap
-        # sustentado não existe recomendação legítima a pedir, e chamar o LLM
+        # Elegibilidade vem antes do provedor e antes do fit-score: sem
+        # fundamento sustentado — gap confirmado ou oportunidade técnica
+        # confirmada — não existe recomendação legítima a pedir, e chamar o LLM
         # aqui só produziria rascunhos que seriam todos descartados.
-        sustentados = gaps_sustentados(perfil)
-        if not sustentados:
+        fundamentos = fundamentos_disponiveis(perfil)
+        if not fundamentos:
             # §11.3: não há o que recomendar, mas isso não é falha operacional.
             # O estado sai vazio e honesto, e o Briefing monta a variante de
             # evidência insuficiente. O provedor não é chamado: os rascunhos
             # seriam todos descartados.
             return self._sem_recomendacao(
-                "nenhum gap está sustentado por evidência confirmada neste "
-                "perfil: as dimensões estruturais estão desconhecidas ou com "
-                "capacidade confirmada e não há dor documentada. O provedor de "
-                "recomendação não foi chamado."
+                "nenhum fundamento está sustentado por evidência confirmada "
+                "neste perfil: não há gap estrutural confirmado, nem dor "
+                "documentada, nem sinal técnico carregado por afirmação "
+                "confirmada. O provedor de recomendação não foi chamado."
             )
+
+        # Oferecer ao modelo uma tecnologia que não tem chunk na recuperação é
+        # convidar a fabricar lastro. O fundamento só continua elegível quando a
+        # interseção entre a tabela determinística e o contexto não é vazia.
+        viaveis = {
+            chave: ids
+            for chave, ids in fundamentos.items()
+            if _tecnologias_com_lastro(chave, contexto)
+        }
+        if not viaveis:
+            return self._sem_recomendacao(
+                "os fundamentos sustentados por evidência não têm nenhuma "
+                "tecnologia NVIDIA correspondente entre os trechos recuperados; "
+                "nenhuma recomendação foi fabricada e o provedor não foi chamado."
+            )
+        fundamentos = viaveis
 
         trechos = {trecho.id_chunk: trecho for trecho in contexto.trechos}
 
@@ -140,7 +178,7 @@ class Recommendation:
             empresa=empresa,
             contexto=contexto,
             confirmadas=confirmadas,
-            sustentados=sustentados,
+            fundamentos=fundamentos,
             trechos=trechos,
             metadados=metadados,
             pontos_centralidade_ia=_pontos_centralidade(fit_score),
@@ -271,7 +309,7 @@ class Recommendation:
         empresa: EmpresaCandidata,
         contexto: ContextoNvidia,
         confirmadas: dict[int, AfirmacaoValidada],
-        sustentados: dict[str, frozenset[int]],
+        fundamentos: dict[tuple[str, str], frozenset[int]],
         trechos: dict[int, TrechoNvidia],
         metadados: dict[int, MetadadoDocumentoFitScore],
         pontos_centralidade_ia: int,
@@ -285,7 +323,7 @@ class Recommendation:
                 empresa,
                 contexto,
                 confirmadas,
-                sustentados,
+                fundamentos,
                 erro_anterior,
             )
             try:
@@ -298,9 +336,18 @@ class Recommendation:
                 if ultima:
                     raise ErroRecommendation(self._MENSAGEM_FALHA_DUPLA) from exc
                 continue
+            except ErroReservaIncompativel as exc:
+                # A reserva recusou o **pedido** estruturado (HTTP 400), não caiu.
+                # Isso é falha de contrato na fronteira de provedores, e falha de
+                # contrato é exatamente o que a tentativa corretiva deste nó existe
+                # para absorver — consome a mesma, nunca uma terceira. O prompt não
+                # ganha aviso de correção: o modelo não respondeu nada errado.
+                if ultima:
+                    raise ErroRecommendation(self._MENSAGEM_FALHA_DUPLA) from exc
+                continue
             except Exception as exc:
                 raise ErroRecommendation(
-                    "O Gemini não respondeu ao Recommendation; nenhuma "
+                    "O provedor de IA não respondeu ao Recommendation; nenhuma "
                     "recomendação foi fabricada."
                 ) from exc
 
@@ -316,7 +363,7 @@ class Recommendation:
                 rascunhos,
                 empresa=empresa,
                 confirmadas=confirmadas,
-                sustentados=sustentados,
+                fundamentos=fundamentos,
                 trechos=trechos,
                 metadados=metadados,
                 pontos_centralidade_ia=pontos_centralidade_ia,
@@ -343,8 +390,8 @@ class Recommendation:
         raise AssertionError("laço de rascunhos terminou em estado impossível")
 
     _MENSAGEM_FALHA_DUPLA = (
-        "O Gemini respondeu duas vezes fora do contrato estruturado; nenhuma "
-        "recomendação foi gravada no estado."
+        "O provedor de IA respondeu duas vezes fora do contrato estruturado; "
+        "nenhuma recomendação foi gravada no estado."
     )
 
     @staticmethod
@@ -367,26 +414,28 @@ class Recommendation:
         *,
         empresa: EmpresaCandidata,
         confirmadas: dict[int, AfirmacaoValidada],
-        sustentados: dict[str, frozenset[int]],
+        fundamentos: dict[tuple[str, str], frozenset[int]],
         trechos: dict[int, TrechoNvidia],
         metadados: dict[int, MetadadoDocumentoFitScore],
         pontos_centralidade_ia: int,
     ) -> tuple[list[Recomendacao], list[str]]:
         validas: list[Recomendacao] = []
         falhas: list[str] = []
-        # §6.1 — um pacote coeso **por gap**. A duplicata é detectada aqui, e
+        # §6.1 — um pacote coeso **por fundamento**. A duplicata é detectada aqui, e
         # não só no contrato, para que um lote repetido vire ``falhas`` e
         # participe da mesma correção única que os demais defeitos de rascunho.
-        # Um gap só é considerado ocupado quando a recomendação dele foi de
-        # fato construída: se a primeira tentativa daquele gap foi descartada,
-        # a seguinte ainda é uma candidata legítima, não uma duplicata.
-        gaps_ja_aceitos: set[str] = set()
+        # Um fundamento só é considerado ocupado quando a recomendação dele
+        # foi de fato construída: se a primeira tentativa daquele fundamento
+        # foi descartada, a seguinte ainda é uma candidata legítima, não uma
+        # duplicata.
+        fundamentos_ja_aceitos: set[tuple[str, str]] = set()
         for rascunho in rascunhos:
-            if rascunho.gap_enderecado in gaps_ja_aceitos:
+            chave = (rascunho.tipo_fundamento, rascunho.identificador_fundamento)
+            if chave in fundamentos_ja_aceitos:
                 falhas.append(
-                    f"recomendação descartada [gap {rascunho.gap_enderecado}]: "
-                    "este gap já é endereçado por outra recomendação do lote; "
-                    "cada gap entra uma única vez no relatório"
+                    f"recomendação descartada [{chave[0]} {chave[1]}]: este "
+                    "fundamento já é endereçado por outra recomendação do "
+                    "lote; cada fundamento entra uma única vez"
                 )
                 continue
             try:
@@ -394,19 +443,19 @@ class Recommendation:
                     rascunho,
                     empresa=empresa,
                     confirmadas=confirmadas,
-                    sustentados=sustentados,
+                    fundamentos=fundamentos,
                     trechos=trechos,
                     metadados=metadados,
                     pontos_centralidade_ia=pontos_centralidade_ia,
                 )
             except (ValidationError, ValueError, TypeError) as erro:
                 falhas.append(
-                    f"recomendação descartada [gap {rascunho.gap_enderecado}]: "
+                    f"recomendação descartada [{chave[0]} {chave[1]}]: "
                     f"{_resumir_erro(erro)}"
                 )
             else:
                 validas.append(recomendacao)
-                gaps_ja_aceitos.add(rascunho.gap_enderecado)
+                fundamentos_ja_aceitos.add(chave)
         return validas, falhas
 
     @staticmethod
@@ -415,13 +464,15 @@ class Recommendation:
         *,
         empresa: EmpresaCandidata,
         confirmadas: dict[int, AfirmacaoValidada],
-        sustentados: dict[str, frozenset[int]],
+        fundamentos: dict[tuple[str, str], frozenset[int]],
         trechos: dict[int, TrechoNvidia],
         metadados: dict[int, MetadadoDocumentoFitScore],
         pontos_centralidade_ia: int,
     ) -> Recomendacao:
         """Resolve ids, calcula as duas regras e deixa o contrato validar o todo."""
-        candidatas = tecnologias_candidatas(rascunho.gap_enderecado)
+        candidatas = tecnologias_candidatas(
+            rascunho.tipo_fundamento, rascunho.identificador_fundamento
+        )
         fora_do_conjunto = [
             tecnologia
             for tecnologia in rascunho.tecnologias
@@ -429,8 +480,10 @@ class Recommendation:
         ]
         if fora_do_conjunto:
             raise ValueError(
-                f"as tecnologias {fora_do_conjunto} não são candidatas do gap "
-                f"{rascunho.gap_enderecado}; permitidas: {list(candidatas)}"
+                f"as tecnologias {fora_do_conjunto} não são candidatas do "
+                f"fundamento {rascunho.tipo_fundamento}/"
+                f"{rascunho.identificador_fundamento}; permitidas: "
+                f"{list(candidatas)}"
             )
 
         desconhecidas = [
@@ -456,9 +509,13 @@ class Recommendation:
                 f"desta recuperação; disponíveis: {sorted(trechos)}"
             )
 
-        # O elo que faltava: a evidência citada precisa sustentar este gap.
-        conferir_gap_sustentado(
-            rascunho.gap_enderecado, rascunho.ids_afirmacoes, sustentados
+        # O elo que faltava: a evidência citada precisa sustentar este
+        # fundamento — gap confirmado ou sinal técnico observado.
+        conferir_fundamento_sustentado(
+            rascunho.tipo_fundamento,
+            rascunho.identificador_fundamento,
+            rascunho.ids_afirmacoes,
+            fundamentos,
         )
 
         evidencias = []
@@ -497,13 +554,16 @@ class Recommendation:
                 for id_afirmacao in rascunho.ids_afirmacoes
             ],
             estagio=empresa.estagio,
-            gap_confirmado=rascunho.gap_enderecado in sustentados,
+            # Oportunidade sem dor documentada não é urgência: a regra
+            # determinística já rebaixa a prioridade quando não há gap.
+            gap_confirmado=rascunho.tipo_fundamento == "gap_confirmado",
         )
         complexidade = calcular_complexidade(
             rascunho.tecnologias, pontos_centralidade_ia
         )
         return Recomendacao(
-            gap_enderecado=rascunho.gap_enderecado,
+            tipo_fundamento=rascunho.tipo_fundamento,
+            identificador_fundamento=rascunho.identificador_fundamento,
             tecnologias=list(rascunho.tecnologias),
             justificativa_tecnica=rascunho.justificativa_tecnica,
             justificativa_negocio=rascunho.justificativa_negocio,
@@ -519,20 +579,28 @@ class Recommendation:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _instrucao(sustentados: dict[str, frozenset[int]]) -> str:
+    def _instrucao(
+        fundamentos: dict[tuple[str, str], frozenset[int]],
+        contexto: ContextoNvidia,
+    ) -> str:
         catalogo = "\n".join(
-            f"  - {gap}: {', '.join(TECNOLOGIAS_POR_GAP[gap])}"
-            for gap in sustentados
+            f"  - [{tipo}] {identificador}: "
+            + ", ".join(_tecnologias_com_lastro((tipo, identificador), contexto))
+            for tipo, identificador in fundamentos
         )
         return (
             "Você é o Recommendation do NVIDIA Startup AI Radar. Produza de 1 a "
-            "5 rascunhos de recomendação, cada um endereçando um gap distinto.\n"
+            "5 rascunhos de recomendação, cada um endereçando um fundamento "
+            "distinto.\n"
             "Regras da resposta:\n"
-            "- gap_enderecado: exatamente um dos gaps sustentados listados "
-            "abaixo. Gap fora desta lista é descartado pelo nó, porque a "
-            "evidência confirmada não o sustenta.\n"
+            "- tipo_fundamento e identificador_fundamento: exatamente um dos "
+            "pares listados abaixo. 'gap_confirmado' é lacuna ou dor "
+            "documentada; 'oportunidade_confirmada' é carga de trabalho "
+            "observada que a stack NVIDIA acelera — nunca descreva uma "
+            "oportunidade como deficiência. Par fora desta lista é descartado "
+            "pelo nó.\n"
             "- tecnologias: de 1 a 3, escolhidas SOMENTE entre as candidatas do "
-            "gap escolhido:\n"
+            "fundamento escolhido:\n"
             f"{catalogo}\n"
             "- justificativa_tecnica: ancorada nos trechos NVIDIA citados.\n"
             "- justificativa_negocio: em termos de resultado operacional para "
@@ -541,10 +609,16 @@ class Recommendation:
             "detalhe contextualizada.\n"
             "- ids_afirmacoes: somente ids das afirmações confirmadas listadas "
             "abaixo; nunca invente um id nem use id de outra empresa. Ao menos "
-            "um dos ids precisa ser um dos que sustentam o gap escolhido — "
-            "citar evidência de outro gap não dá lastro a este.\n"
+            "um dos ids precisa ser um dos que sustentam o fundamento "
+            "escolhido — citar evidência de outro fundamento não dá lastro a "
+            "este.\n"
             "- ids_chunks: somente ids dos trechos NVIDIA listados abaixo; ao "
             "menos um precisa ser de um trecho com origem 'tecnologia'.\n"
+            "- LASTRO POR TECNOLOGIA: para CADA tecnologia escolhida, cite ao "
+            "menos um chunk com origem 'tecnologia' cuja tecnologia seja "
+            "exatamente aquela. Um chunk de outro produto NÃO sustenta a "
+            "tecnologia recomendada; chunk conceitual entra apenas como "
+            "contexto adicional. Recomendação sem esse lastro é descartada.\n"
             "- Você NÃO define prioridade, NÃO define complexidade e NÃO calcula "
             "fit-score: esses três campos não existem neste schema e são "
             "calculados por regra determinística fora do modelo.\n"
@@ -579,31 +653,45 @@ class Recommendation:
         )
 
     @staticmethod
-    def _mapa_de_gaps(
-        perfil: PerfilValidado, sustentados: dict[str, frozenset[int]]
+    def _mapa_de_fundamentos(
+        perfil: PerfilValidado, fundamentos: dict[tuple[str, str], frozenset[int]]
     ) -> str:
-        """As três situações, separadas: o que é gap, o que dói e o que não vale."""
+        """As quatro situações, separadas e sem se disfarçarem uma da outra.
+
+        ``fundamentos`` é indexado pelo par ``(tipo, identificador)``. Indexar
+        por string aqui não levanta erro: a seção simplesmente esvazia e o
+        modelo perde a informação em silêncio — por isso cada seção desempacota
+        o par explicitamente.
+        """
         estruturais = [
             f"{item.dimensao} (sustentado pelas afirmações "
-            f"{sorted(sustentados[item.dimensao])})"
+            f"{sorted(fundamentos[('gap_confirmado', item.dimensao)])})"
             for item in perfil.estado_dimensoes_gap
-            if item.dimensao in sustentados
+            if ("gap_confirmado", item.dimensao) in fundamentos
         ]
         dores = [
-            f"{gap} (sustentado pelas afirmações {sorted(ids)})"
-            for gap, ids in sustentados.items()
-            if gap in CATEGORIAS_DE_DOR
+            f"{identificador} (sustentada pelas afirmações {sorted(ids)})"
+            for (tipo, identificador), ids in fundamentos.items()
+            if tipo == "gap_confirmado" and identificador in CATEGORIAS_DE_DOR
+        ]
+        oportunidades = [
+            f"{identificador} (observada nas afirmações {sorted(ids)})"
+            for (tipo, identificador), ids in fundamentos.items()
+            if tipo == "oportunidade_confirmada"
         ]
         bloqueadas = [
             f"{item.dimensao} ({item.estado})"
             for item in perfil.estado_dimensoes_gap
-            if item.dimensao not in sustentados
+            if ("gap_confirmado", item.dimensao) not in fundamentos
         ]
         return (
             "Dimensões estruturais confirmadas como gap: "
             + ("; ".join(estruturais) or "nenhuma")
             + "\nCategorias de dor documentada por afirmação confirmada: "
             + ("; ".join(dores) or "nenhuma")
+            + "\nCargas de trabalho observadas — oportunidade confirmada, "
+            "nunca deficiência: "
+            + ("; ".join(oportunidades) or "nenhuma")
             + "\nDimensões desconhecidas ou com capacidade já confirmada — NÃO "
             "podem ser recomendadas como gap: "
             + ("; ".join(bloqueadas) or "nenhuma")
@@ -616,16 +704,16 @@ class Recommendation:
         empresa: EmpresaCandidata,
         contexto: ContextoNvidia,
         confirmadas: dict[int, AfirmacaoValidada],
-        sustentados: dict[str, frozenset[int]],
+        fundamentos: dict[tuple[str, str], frozenset[int]],
         erro_anterior: str | None,
     ) -> list[tuple[str, str]]:
         mensagens = [
-            ("system", self._instrucao(sustentados)),
+            ("system", self._instrucao(fundamentos, contexto)),
             (
                 "human",
                 self._dados(classificacao, empresa, contexto, confirmadas)
                 + "\n\n"
-                + self._mapa_de_gaps(perfil, sustentados),
+                + self._mapa_de_fundamentos(perfil, fundamentos),
             ),
         ]
         if erro_anterior:

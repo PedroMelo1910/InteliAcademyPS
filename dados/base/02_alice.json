@@ -19,6 +19,15 @@
       "data_acesso": "2026-08-24"
     },
     {
+      "tipo": "blog",
+      "titulo": "Como a inteligência artificial funciona na triagem do Alice Agora",
+      "conteudo_texto": "A Alice explica que o Alice Agora usa um modelo de linguagem para interpretar os sintomas relatados no chat, fazer perguntas que estruturam o caso e preparar um resumo clínico para o profissional de saúde. A empresa delimita o papel da tecnologia: a inteligência artificial não fornece diagnóstico, prescrição nem decisão clínica; o atendimento e o julgamento permanecem com profissionais de saúde. O serviço funciona continuamente, inclusive fora do horário comercial.",
+      "url_fonte": "https://alice.com.br/blog/conheca-a-alice/triagem-inteligencia-artificial-alice-agora/",
+      "dominio_fonte": "alice.com.br",
+      "data_publicacao": "2026-06-29",
+      "data_acesso": "2026-09-07"
+    },
+    {
       "tipo": "release",
       "titulo": "Alice no portfólio do SoftBank Latin America Fund",
       "conteudo_texto": "O portfólio do SoftBank Latin America Fund inclui a Alice na categoria de healthtech e resume a proposta da empresa como tornar pessoas mais saudáveis por meio de planos de saúde com cuidados essenciais. Essa presença funciona como fonte complementar sobre setor, natureza empresarial e vínculo com investimento de venture capital. A página aponta para o site oficial da Alice e confirma que a companhia faz parte do ecossistema latino-americano de empresas de tecnologia apoiadas pelo fundo.",

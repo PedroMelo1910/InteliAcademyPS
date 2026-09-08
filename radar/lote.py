@@ -35,6 +35,9 @@ from radar.provedores import (
     ProvedorClassificacao,
     ProvedorGeminiClassificacao,
     ProvedorGeminiPerfilExtraido,
+    ProvedorGroqClassificacao,
+    ProvedorGroqPerfilExtraido,
+    compor_com_reserva,
     ProvedorPerfilExtraido,
     falha_operacional,
 )
@@ -336,11 +339,18 @@ def criar_analisador_lote(
             check_every_n_seconds=0.1,
             max_bucket_size=1,
         )
-        provedor_extracao = ProvedorGeminiPerfilExtraido(
-            api_key, limitador=limitador
+        chave_reserva = os.getenv("GROQ_API_KEY", "").strip()
+        provedor_extracao = compor_com_reserva(
+            ProvedorGeminiPerfilExtraido(api_key, limitador=limitador),
+            ProvedorGroqPerfilExtraido,
+            fronteira="extractor",
+            chave_reserva=chave_reserva,
         )
-        provedor_classificacao = ProvedorGeminiClassificacao(
-            api_key, limitador=limitador
+        provedor_classificacao = compor_com_reserva(
+            ProvedorGeminiClassificacao(api_key, limitador=limitador),
+            ProvedorGroqClassificacao,
+            fronteira="classifier",
+            chave_reserva=chave_reserva,
         )
     assert provedor_classificacao is not None
     base = BaseStartups(caminho_banco)

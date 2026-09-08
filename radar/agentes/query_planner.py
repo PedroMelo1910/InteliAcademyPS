@@ -6,8 +6,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from radar.base_startups import BaseStartups
+from radar.configuracao import MINIMO_CANDIDATAS_UTEIS
 from radar.contratos import EstadoRadar, PlanoConsulta, ResultadoRecuperacao
-from radar.provedores import ProvedorPlanoConsulta
+from radar.provedores import ErroReservaIncompativel, ProvedorPlanoConsulta
 
 
 class ErroQueryPlanner(RuntimeError):
@@ -26,7 +27,10 @@ class QueryPlanner:
             plano = PlanoConsulta.model_validate(plano_existente)
             if resultado_existente is not None:
                 resultado = ResultadoRecuperacao.model_validate(resultado_existente)
-                if not resultado.empresas:
+                # Mesmo limiar de R1. Duas réguas diferentes fariam R1 mandar
+                # relaxar e o planejador devolver o plano intacto — o grafo
+                # giraria sem nunca ampliar a busca.
+                if len(resultado.empresas) < MINIMO_CANDIDATAS_UTEIS:
                     return self._relaxar(plano, estado)
             # No aprofundamento o plano é reutilizado, sem nova chamada ao LLM.
             return {"trajeto": ["query_planner"]}
@@ -61,9 +65,22 @@ class QueryPlanner:
                 )
             try:
                 bruto = self.provedor.invocar(mensagens)
+            except ErroReservaIncompativel as exc:
+                # A reserva recusou o **pedido** estruturado (HTTP 400), não caiu.
+                # Isso é falha de contrato na fronteira de provedores, e falha de
+                # contrato é exatamente o que a tentativa corretiva deste nó existe
+                # para absorver — consome a mesma, nunca uma terceira. O prompt não
+                # ganha aviso de correção: o modelo não respondeu nada errado.
+                if tentativa == 1:
+                    raise ErroQueryPlanner(
+                        "O provedor de IA respondeu duas vezes fora do contrato "
+                        "estruturado; a execução foi interrompida sem resultados."
+                    ) from exc
+                continue
             except Exception as exc:
                 raise ErroQueryPlanner(
-                    "O Gemini não respondeu ao Query Planner; nenhum resultado foi fabricado."
+                    "O provedor de IA não respondeu ao Query Planner; "
+                    "nenhum resultado foi fabricado."
                 ) from exc
             try:
                 plano = PlanoConsulta.model_validate(bruto)
@@ -73,8 +90,8 @@ class QueryPlanner:
                 erro_anterior = self._resumir_erro(exc)
                 if tentativa == 1:
                     raise ErroQueryPlanner(
-                        "O Gemini respondeu duas vezes fora do contrato estruturado; "
-                        "a execução foi interrompida sem resultados."
+                        "O provedor de IA respondeu duas vezes fora do contrato "
+                        "estruturado; a execução foi interrompida sem resultados."
                     ) from exc
         raise AssertionError("laço de validação terminou em estado impossível")
 

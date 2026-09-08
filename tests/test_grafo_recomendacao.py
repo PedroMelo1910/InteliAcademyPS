@@ -24,9 +24,10 @@ from radar.contratos import (
 from radar.grafo import montar_grafo
 from tests.conftest import (
     ConsultorNvidiaFalso,
-    recomendacao_falsa,
+    ProvedorFixo,
     ProvedorSequencialFalso,
     contexto_nvidia_falso,
+    recomendacao_falsa,
 )
 
 
@@ -39,18 +40,6 @@ TRAJETO_ATE_R3 = (
 )
 TRAJETO_COMPLETO = TRAJETO_ATE_R3 + ("nvidia_rag", "recommendation", "briefing")
 TRAJETO_BYPASS = TRAJETO_ATE_R3 + ("briefing",)
-
-
-class ProvedorFixo:
-    def __init__(self, resposta):
-        self.resposta = resposta
-        self.chamadas = 0
-        self.mensagens = []
-
-    def invocar(self, mensagens):
-        self.chamadas += 1
-        self.mensagens.append(mensagens)
-        return self.resposta
 
 
 def plano_caju():
@@ -130,9 +119,10 @@ def classificacao(classe="AI-enabled"):
     }
 
 
-def rascunho_valido(id_chunk=101):
+def rascunho_valido(id_chunk=107):
     return {
-        "gap_enderecado": "distribuicao",
+        "tipo_fundamento": "gap_confirmado",
+        "identificador_fundamento": "distribuicao",
         "tecnologias": ["NVIDIA Inception"],
         "justificativa_tecnica": (
             "O programa abre acesso a suporte técnico e créditos de computação."
@@ -472,7 +462,7 @@ def test_descarte_parcial_registra_o_erro_exato_no_estado(tmp_path, caminho_banc
     # teste prova continua sendo o da tecnologia fora das candidatas do gap, e
     # não o da regra de gap duplicado (§6.1), que agiria antes.
     invalido = rascunho_valido()
-    invalido["gap_enderecado"] = "otimizacao_tecnica"
+    invalido["identificador_fundamento"] = "otimizacao_tecnica"
     invalido["tecnologias"] = ["NVIDIA Riva"]
     provedor = ProvedorSequencialFalso(
         lote(rascunho_valido(), invalido), lote(rascunho_valido(), invalido)
@@ -557,7 +547,7 @@ def test_checkpoint_nunca_traz_gap_repetido_no_relatorio_final(
     assert provedor.chamadas == 2
     for estado in (saida, recuperado):
         gaps = [
-            Recomendacao.model_validate(item).gap_enderecado
+            Recomendacao.model_validate(item).identificador_fundamento
             for item in estado["recomendacoes"]
         ]
         assert gaps == ["distribuicao"]

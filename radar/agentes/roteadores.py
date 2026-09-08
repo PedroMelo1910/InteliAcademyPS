@@ -1,4 +1,9 @@
-from radar.configuracao import LIMIAR_DERRUBADA, MAX_EXTRACOES, TETO_RELAXAMENTO
+from radar.configuracao import (
+    LIMIAR_DERRUBADA,
+    MAX_EXTRACOES,
+    MINIMO_CANDIDATAS_UTEIS,
+    TETO_RELAXAMENTO,
+)
 from radar.contratos import (
     Classificacao,
     EstadoRadar,
@@ -11,14 +16,24 @@ from radar.contratos import (
 
 
 def rotear_r1(estado: EstadoRadar) -> ResultadoR1:
-    """R1 puro; a ordem dos quatro predicados é parte do contrato."""
+    """R1 puro; a ordem dos predicados é parte do contrato.
+
+    O ranking só encerra a descoberta quando tem tamanho útil para comparar
+    (``MINIMO_CANDIDATAS_UTEIS``). Abaixo disso, um filtro estreito demais é a
+    explicação mais provável, e gastar um degrau da escada de relaxamento vale
+    mais do que devolver um nome só. Depois do teto a régua cai: resultado
+    parcial válido é entregue como está — `sem_resultado` fica reservado ao
+    conjunto realmente vazio.
+    """
     if estado.get("startup_selecionada") is not None:
         return "analisar"
     resultado = ResultadoRecuperacao.model_validate(estado["resultado_recuperacao"])
-    if resultado.empresas:
+    if len(resultado.empresas) >= MINIMO_CANDIDATAS_UTEIS:
         return "candidatas_prontas"
     if int(estado.get("tentativas_relaxamento", 0)) < TETO_RELAXAMENTO:
         return "relaxar"
+    if resultado.empresas:
+        return "candidatas_prontas"
     return "sem_resultado"
 
 

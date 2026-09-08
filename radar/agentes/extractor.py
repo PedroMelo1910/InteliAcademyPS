@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import ValidationError
 
+from radar.agentes.ancoras_sinal import (
+    completar_sinais_inequivocos,
+    filtrar_sinais_sem_ancora,
+    sinais_possivelmente_nao_extraidos,
+    sinais_possivelmente_omitidos,
+)
 from radar.agentes.roteadores import precisa_reextrair
 from radar.base_startups import BaseStartups, ErroDocumentosStartup
 from radar.contratos import (
@@ -21,7 +28,75 @@ from radar.contratos import (
     PlanoConsulta,
     ResultadoRecuperacao,
 )
-from radar.provedores import ProvedorPerfilExtraido
+from radar.provedores import ErroReservaIncompativel, ProvedorPerfilExtraido
+
+
+logger = logging.getLogger(__name__)
+
+# As seis categorias em que a polaridade não carrega informação. O contrato
+# aceita nelas um único valor, e é isso que torna a correção determinística.
+CATEGORIAS_NAO_ESTRUTURAIS: tuple[str, ...] = tuple(
+    categoria
+    for categoria in CATEGORIAS_AFIRMACAO
+    if categoria not in CATEGORIAS_ESTRUTURAIS
+)
+
+# Valores que o provedor às vezes preenche por analogia com as estruturais.
+POLARIDADES_REDUNDANTES: frozenset[str] = frozenset(
+    {"presenca", "ausencia_explicita"}
+)
+
+POLARIDADE_CANONICA = "neutro"
+
+
+def normalizar_polaridade_nao_estrutural(bruto: object) -> object:
+    """Corrige a polaridade redundante das categorias sem semântica de gap.
+
+    A §11 do contrato reserva ``presenca`` e ``ausencia_explicita`` às quatro
+    dimensões estruturais; nas outras seis categorias ``neutro`` é o único
+    valor válido. Quando o provedor preenche uma delas por analogia, a resposta
+    está fora da forma, mas nenhum fato está errado: o texto, o trecho literal,
+    a categoria e a proveniência continuam os mesmos. Trocar só esse campo é
+    determinístico e preserva o significado — recusar consome o único retry e
+    derruba a análise inteira por uma questão de forma.
+
+    Nada mais é reparado. Categoria estrutural, categoria desconhecida,
+    polaridade ausente, polaridade irreconhecível e objeto malformado seguem
+    para a validação, o retry e a falha segura que já existem.
+    """
+    if not isinstance(bruto, dict):
+        return bruto
+    afirmacoes = bruto.get("afirmacoes")
+    if not isinstance(afirmacoes, list):
+        return bruto
+    corrigidas = [_normalizar_afirmacao(afirmacao) for afirmacao in afirmacoes]
+    alteradas = sum(
+        1
+        for original, corrigida in zip(afirmacoes, corrigidas)
+        if original is not corrigida
+    )
+    if not alteradas:
+        return bruto
+    logger.info(
+        "polaridade redundante normalizada para 'neutro' em %s afirmação(ões) "
+        "de categoria não estrutural",
+        alteradas,
+    )
+    copia = dict(bruto)
+    copia["afirmacoes"] = corrigidas
+    return copia
+
+
+def _normalizar_afirmacao(afirmacao: object) -> object:
+    if not isinstance(afirmacao, dict):
+        return afirmacao
+    if afirmacao.get("categoria") not in CATEGORIAS_NAO_ESTRUTURAIS:
+        return afirmacao
+    if afirmacao.get("polaridade") not in POLARIDADES_REDUNDANTES:
+        return afirmacao
+    corrigida = dict(afirmacao)
+    corrigida["polaridade"] = POLARIDADE_CANONICA
+    return corrigida
 
 
 CAMPOS_DERIVADOS_DA_EXTRACAO: tuple[str, ...] = (
@@ -191,23 +266,64 @@ class Extractor:
                 erro_anterior = self._resumir_erro(exc)
                 if tentativa == 1:
                     raise ErroExtractor(
-                        "O Gemini respondeu duas vezes fora do contrato estruturado; "
-                        "nenhum perfil foi gravado no estado."
+                        "O provedor de IA respondeu duas vezes fora do contrato "
+                        "estruturado; nenhum perfil foi gravado no estado."
+                    ) from exc
+                continue
+            except ErroReservaIncompativel as exc:
+                # A reserva recusou o **pedido** estruturado (HTTP 400), não caiu.
+                # Isso é falha de contrato na fronteira de provedores, e falha de
+                # contrato é exatamente o que a tentativa corretiva deste nó existe
+                # para absorver — consome a mesma, nunca uma terceira. O prompt não
+                # ganha aviso de correção: o modelo não respondeu nada errado.
+                if tentativa == 1:
+                    raise ErroExtractor(
+                        "O provedor de IA respondeu duas vezes fora do contrato "
+                        "estruturado; nenhum perfil foi gravado no estado."
                     ) from exc
                 continue
             except Exception as exc:
                 raise ErroExtractor(
-                    "O Gemini não respondeu ao Extractor; nenhum perfil foi fabricado."
+                    "O provedor de IA não respondeu ao Extractor; "
+                    "nenhum perfil foi fabricado."
                 ) from exc
             try:
-                return self._validar(bruto, id_startup, documentos)
+                perfil = self._validar(bruto, id_startup, documentos)
             except (ValidationError, ValueError, TypeError) as exc:
                 erro_anterior = self._resumir_erro(exc)
                 if tentativa == 1:
                     raise ErroExtractor(
-                        "O Gemini respondeu duas vezes fora do contrato estruturado; "
-                        "nenhum perfil foi gravado no estado."
+                        "O provedor de IA respondeu duas vezes fora do contrato "
+                        "estruturado; nenhum perfil foi gravado no estado."
                     ) from exc
+                continue
+            omitidos = sinais_possivelmente_omitidos(perfil)
+            nao_extraidos = sinais_possivelmente_nao_extraidos(perfil, documentos)
+            if (omitidos or nao_extraidos) and tentativa == 0:
+                detalhes_afirmacoes = "; ".join(
+                    f"afirmação {id_afirmacao}: {', '.join(sinais)}"
+                    for id_afirmacao, sinais in omitidos
+                )
+                detalhes_documentos = "; ".join(
+                    f"documento {id_documento}: {', '.join(sinais)}"
+                    for id_documento, sinais in nao_extraidos
+                )
+                detalhes = "; ".join(
+                    item
+                    for item in (detalhes_afirmacoes, detalhes_documentos)
+                    if item
+                )
+                erro_anterior = (
+                    "sinais técnicos possivelmente omitidos apesar de âncora "
+                    f"literal inequívoca ({detalhes}). Reavalie essa afirmação "
+                    "ou documento contra toda a matriz; extraia o fato quando "
+                    "ele realmente qualificar e anexe somente os sinais "
+                    "sustentados pelo próprio trecho_citado"
+                )
+                continue
+            if omitidos:
+                perfil = completar_sinais_inequivocos(perfil)
+            return perfil
         raise AssertionError("laço de validação terminou em estado impossível")
 
     @staticmethod
@@ -221,7 +337,13 @@ class Extractor:
         primeiro, deixando ``taxa_derrubada`` estruturalmente em zero e o laço
         R2 inalcançável em produção.
         """
-        perfil = PerfilExtraido.model_validate(bruto)
+        # Duas correções determinísticas antes do contrato: a polaridade
+        # redundante das categorias não estruturais e o sinal técnico sem
+        # âncora literal. Nenhuma das duas inventa fato; ambas removem o que a
+        # fonte não sustenta, preservando a afirmação inteira.
+        perfil = PerfilExtraido.model_validate(
+            filtrar_sinais_sem_ancora(normalizar_polaridade_nao_estrutural(bruto))
+        )
         if perfil.id_startup != id_startup:
             raise ValueError(
                 f"id_startup {perfil.id_startup} difere da startup analisada {id_startup}"
@@ -260,6 +382,7 @@ class Extractor:
         modo_estrito: bool = False,
     ) -> str:
         estruturais = ", ".join(sorted(CATEGORIAS_ESTRUTURAIS))
+        nao_estruturais = ", ".join(CATEGORIAS_NAO_ESTRUTURAIS)
         instrucao = (
             "Você é o Extractor do NVIDIA Startup AI Radar. Produza um PerfilExtraido "
             "estritamente estruturado sobre a startup indicada, usando exclusivamente "
@@ -278,12 +401,75 @@ class Extractor:
             "'distribuicao' para canais ou acesso comercial. Use 'outro' somente "
             "quando nenhuma categoria definida representar literalmente o fato; "
             "não invente uma afirmação de produto se a fonte não a sustentar.\n"
-            f"- nas categorias estruturais ({estruturais}), use 'presenca' para "
-            "capacidade observada, 'ausencia_explicita' para gap declarado e "
+            "- MATRIZ DE POLARIDADE POR CATEGORIA, obrigatória e sem exceção:\n"
+            f"  * categorias estruturais ({estruturais}): use 'presenca' para "
+            "capacidade observada, 'ausencia_explicita' para gap declarado ou "
             "'neutro' quando o documento citar o tema sem permitir concluir "
-            "capacidade ou gap; em todas as demais categorias use 'neutro'.\n"
+            "capacidade ou gap.\n"
+            f"  * categorias não estruturais ({nao_estruturais}): use sempre "
+            "'neutro'. Nessas categorias a polaridade não tem significado e "
+            "nenhum outro valor é aceito.\n"
+            "- SINAIS TÉCNICOS (campo sinais_tecnicos, opcional): avalie "
+            "obrigatoriamente cada afirmação contra os dez sinais abaixo e "
+            "anexe todos os sinais qualificados na mesma afirmação. Não deixe "
+            "a lista vazia quando o próprio trecho_citado nomear uma das cargas "
+            "de trabalho definidas. Anexe um "
+            "sinal a uma afirmação SOMENTE quando o trecho_citado dela nomear "
+            "literalmente a carga de trabalho. Setor não cria sinal — atuar "
+            "num mercado não é executar uma carga. Menção genérica do tipo "
+            "'usa IA' ou 'usa inteligência artificial', sem nomear a carga, "
+            "também não cria sinal. Nenhum sinal continua sendo um resultado "
+            "válido depois dessa auditoria completa, e é sempre preferível a "
+            "inferir uma carga que a fonte não nomeou.\n"
+            "- Antes de finalizar, percorra todos os documentos permitidos e "
+            "procure fatos que nomeiem alguma das dez cargas técnicas. Se um "
+            "documento trouxer uma carga qualificável, inclua ao menos uma "
+            "afirmação literal sobre ela; não resuma o perfil apenas ao produto "
+            "geral e ao financiamento.\n"
+            "  * inferencia_llm: qualifica quando o texto nomeia modelo de "
+            "linguagem, LLM, IA generativa ou RAG dentro do produto. NÃO "
+            "qualifica: 'assistente com IA'.\n"
+            "  * treinamento_ou_finetuning: qualifica quando nomeia treino de "
+            "modelo, pré-treino contínuo ou ajuste fino. NÃO qualifica: "
+            "'algoritmo próprio'.\n"
+            "  * voz_fala_ou_transcricao: qualifica quando nomeia voz, fala, "
+            "áudio, transcrição ou call center. NÃO qualifica: 'atendimento "
+            "por aplicativo'.\n"
+            "  * dados_em_escala: qualifica quando declara volume de dados ou "
+            "de amostras processadas. NÃO qualifica: 'dados proprietários' sem "
+            "volume declarado.\n"
+            "  * machine_learning_classico: qualifica quando nomeia modelo "
+            "preditivo, score ou técnica de ML sobre atributos estruturados "
+            "citados. NÃO qualifica: 'usa IA e machine learning' sem dado nem "
+            "modelo nomeado.\n"
+            "  * visao_computacional: qualifica quando nomeia imagem, vídeo, "
+            "OCR, reconhecimento facial ou visão computacional. NÃO qualifica: 'inspeção de "
+            "qualidade'.\n"
+            "  * robotica_ou_simulacao: qualifica quando nomeia robô, veículo "
+            "autônomo, simulação ou gêmeo digital. NÃO qualifica: 'automação "
+            "de processos'.\n"
+            "  * imagem_medica: qualifica quando nomeia exame de imagem, "
+            "radiologia ou patologia digital. NÃO qualifica: 'atua em "
+            "saúde'.\n"
+            "  * agentes_com_acoes_ou_controles: qualifica quando nomeia "
+            "sistema multiagente, agente que executa ações, verificação de "
+            "citação ou human-in-the-loop. NÃO qualifica: 'chatbot'.\n"
+            "  * ciberseguranca_em_escala: qualifica quando nomeia detecção de "
+            "ameaça, intrusão ou análise de telemetria de segurança. NÃO "
+            "qualifica: 'criptografia' ou 'HSM'.\n"
+            "- MODALIDADE DA FONTE, obrigatória: preserve se o documento "
+            "descreve capacidade **atual**, **requisito** ou **responsabilidade "
+            "futura**. Documento de vaga descreve o que o cargo vai fazer, não "
+            "o que a empresa já faz: escreva 'A vaga...', 'O cargo...' ou "
+            "'A empresa busca...', nunca 'A empresa faz...'. Uma vaga pode "
+            "sustentar sinal técnico quando a carga de trabalho está nomeada no "
+            "trecho, mas jamais como prova de que a capacidade já opera no "
+            "produto. O mesmo vale para proposta, plano ou projeto anunciado: "
+            "proposta não é operação.\n"
             f"- id_documento: um dos ids fornecidos: {ids_permitidos}.\n"
-            "- trecho_citado: substring literal e contígua do documento citado, com "
+            "- trecho_citado: substring literal e contígua exclusivamente do "
+            "conteudo_texto do documento citado; nunca copie do título, tipo, URL "
+            "ou qualquer outro metadado. O trecho deve ter "
             f"{MINIMO_CARACTERES_TRECHO_CITADO} a {LIMITE_TRECHO_CITADO} caracteres "
             f"e ao menos {MINIMO_PALAVRAS_TRECHO_CITADO} palavras, copiada sem "
             "reescrever, resumir, corrigir ou traduzir.\n"
@@ -320,7 +506,9 @@ class Extractor:
         )
         blocos = "\n\n".join(
             f"[documento {documento.id_documento} | tipo: {documento.tipo} | "
-            f"título: {documento.titulo}]\n{documento.conteudo_texto}"
+            f"título informativo (proibido citar): {documento.titulo}]\n"
+            f"CONTEUDO_TEXTO (única área válida para trecho_citado):\n"
+            f"{documento.conteudo_texto}"
             for documento in documentos
         )
         return f"{identidade}\n\nDocumentos permitidos:\n\n{blocos}"

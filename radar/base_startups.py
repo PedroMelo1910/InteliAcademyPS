@@ -55,6 +55,24 @@ CREATE TABLE IF NOT EXISTS analises (
 CREATE INDEX IF NOT EXISTS idx_analises_status_classe ON analises(status, classe);
 """
 
+# Versão do contrato do cache `analises`, carimbada em ``PRAGMA user_version``.
+# Suba este número sempre que a estrutura da tabela mudar de forma incompatível.
+VERSAO_SCHEMA_ANALISES = 1
+
+COLUNAS_ANALISES_ESPERADAS = frozenset(
+    {
+        "startup_id",
+        "status",
+        "classe",
+        "fit_score_total",
+        "fit_score_json",
+        "perfil_validado_json",
+        "motivo_evidencia_insuficiente",
+        "data_execucao",
+        "versao_rubrica",
+    }
+)
+
 
 SCHEMA_SQL = f"""
 PRAGMA foreign_keys = ON;
@@ -164,8 +182,34 @@ def _contar_linhas_analises(conexao: sqlite3.Connection) -> int | None:
         return None
 
 
+def _executar_schema_analises(conexao: sqlite3.Connection) -> None:
+    """Aplica o DDL do cache sem ``executescript``.
+
+    ``executescript`` faz COMMIT implícito antes de rodar, o que quebraria a
+    transação da migração: uma falha no meio deixaria a tabela antiga já
+    descartada. Executar comando a comando mantém tudo dentro do mesmo
+    ``with conexao``, com rollback real.
+    """
+    for comando in (parte.strip() for parte in SCHEMA_ANALISES_SQL.split(";")):
+        if comando:
+            conexao.execute(comando)
+
+
+def _colunas_de(conexao: sqlite3.Connection, tabela: str) -> frozenset[str]:
+    return frozenset(
+        linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")
+    )
+
+
 def _preparar_cache_analises(conexao: sqlite3.Connection) -> None:
-    """Recria somente o cache legado quando suas garantias ficaram obsoletas."""
+    """Prepara o cache pela versão declarada do schema, nunca pelo texto do DDL.
+
+    A decisão anterior era uma busca de substring dentro de
+    ``sqlite_master.sql``. Reformatar o ``CHECK`` — quebrar uma linha, dobrar um
+    espaço — bastava para o boot julgar o cache obsoleto e descartar todas as
+    análises concluídas. ``PRAGMA user_version`` é um carimbo explícito e
+    estável: não muda quando a formatação muda.
+    """
     tabelas = {
         linha["name"]
         for linha in conexao.execute(
@@ -176,30 +220,55 @@ def _preparar_cache_analises(conexao: sqlite3.Connection) -> None:
         raise ValueError(
             "o banco não está inicializado; execute python -m scripts.inicializar_base"
         )
-    definicao = conexao.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
-        ("analises",),
-    ).fetchone()
-    if definicao is not None:
-        if "motivo_evidencia_insuficiente IS NOT NULL" in (definicao["sql"] or ""):
-            return
-        # Antes deste marco não havia escritor para a tabela. Como ela é cache
-        # regenerável por definição, recriá-la é mais seguro do que transportar
-        # linhas sem o motivo obrigatório para um contrato novo. O descarte é
-        # barulhento de propósito: apagar análises em silêncio deixaria o
-        # operador sem saber por que a cobertura voltou a zero.
-        descartadas = _contar_linhas_analises(conexao)
-        LOGGER.warning(
-            "cache legado de análises será recriado: a tabela `analises` não "
-            "atende ao contrato atual e %s. O cache é regenerável — reexecute "
-            "python -m scripts.analisar_lote --executar para repopulá-lo.",
-            f"{descartadas} linha(s) serão descartadas"
-            if descartadas is not None
-            else "as linhas existentes serão descartadas",
+
+    versao = int(conexao.execute("PRAGMA user_version").fetchone()[0])
+    if versao > VERSAO_SCHEMA_ANALISES:
+        raise ValueError(
+            f"o cache de análises está na versão {versao}, à frente da versão "
+            f"{VERSAO_SCHEMA_ANALISES} suportada por este código; atualize o "
+            "projeto em vez de rebaixar o banco"
         )
-        conexao.execute("DROP TABLE analises")
-    # Tabela ausente é banco novo, não cache legado: cria em silêncio.
-    conexao.executescript(SCHEMA_ANALISES_SQL)
+
+    if "analises" not in tabelas:
+        # Banco novo (ou cache já descartado): cria e carimba, em silêncio.
+        _executar_schema_analises(conexao)
+        conexao.execute(f"PRAGMA user_version = {VERSAO_SCHEMA_ANALISES}")
+        return
+
+    if _colunas_de(conexao, "analises") == COLUNAS_ANALISES_ESPERADAS:
+        # Estrutura atual: nada a migrar. O carimbo é a via rápida, mas quem
+        # decide é o conjunto de colunas — assim um banco estruturalmente atual
+        # e sem carimbo faz a transição de uma vez (preservando todas as linhas
+        # válidas), e um banco carimbado cuja tabela foi trocada à mão ainda é
+        # detectado. Reformatar o DDL não muda coluna nenhuma, que é justamente
+        # o defeito que este caminho elimina.
+        if versao != VERSAO_SCHEMA_ANALISES:
+            conexao.execute(f"PRAGMA user_version = {VERSAO_SCHEMA_ANALISES}")
+        return
+
+    # Cache genuinamente legado: a estrutura não atende ao contrato atual. Como
+    # ele é regenerável por definição, recriar é mais seguro do que transportar
+    # linhas sem as colunas obrigatórias. O descarte é barulhento de propósito:
+    # apagar análises em silêncio deixaria o operador sem saber por que a
+    # cobertura voltou a zero. O aviso nomeia a ação, nunca despeja DDL ou dado.
+    descartadas = _contar_linhas_analises(conexao)
+    LOGGER.warning(
+        "cache legado de análises será recriado: a tabela `analises` não "
+        "atende ao contrato atual e %s. O cache é regenerável — reexecute "
+        "python -m scripts.analisar_lote --executar para repopulá-lo.",
+        f"{descartadas} linha(s) serão descartadas"
+        if descartadas is not None
+        else "as linhas existentes serão descartadas",
+    )
+    # O ``sqlite3`` só abre transação implícita antes de DML, nunca antes de
+    # DDL: sem este BEGIN, o DROP seria confirmado na hora e uma falha no meio
+    # deixaria o banco sem tabela nenhuma. Com ele, descarte, recriação e
+    # carimbo caem juntos no rollback do ``with``.
+    if not conexao.in_transaction:
+        conexao.execute("BEGIN IMMEDIATE")
+    conexao.execute("DROP TABLE analises")
+    _executar_schema_analises(conexao)
+    conexao.execute(f"PRAGMA user_version = {VERSAO_SCHEMA_ANALISES}")
 
 
 def preparar_cache_analises(caminho_banco: Path) -> None:
