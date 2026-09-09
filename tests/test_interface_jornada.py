@@ -152,15 +152,15 @@ def test_a_candidata_sem_analise_persistida_nao_ganha_zero_nem_classe():
     assert "AI-native" not in tela and "non-AI" not in tela
 
 
-def test_o_bm25_aparece_como_informacao_secundaria_e_explicada():
+def test_a_correspondencia_textual_nao_polui_os_cartoes_do_ranking():
     teste = montar(AplicacaoFalsa())
 
     submeter(teste, CONSULTA_PADRAO)
     tela = textos(teste)
 
-    assert "BM25" in tela
-    assert "relevância textual" in tela
-    assert "não entra no fit-score" in tela
+    assert "Correspondência com a busca" not in tela
+    assert "BM25" not in tela
+    assert "menor é mais próximo" not in tela
 
 
 def test_o_estado_vazio_e_explicito_e_nao_inventa_candidata():

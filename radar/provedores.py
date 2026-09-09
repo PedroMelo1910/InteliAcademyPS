@@ -633,21 +633,10 @@ class ProvedorEmbeddingNvidia:
         dimensao: int = DIMENSAO_EMBEDDING_NVIDIA,
         cliente: object | None = None,
     ):
-        if cliente is None:
-            if not api_key:
-                raise ValueError("api_key é obrigatória sem um cliente injetado")
-            try:
-                cliente = NVIDIAEmbeddings(
-                    model=modelo, nvidia_api_key=api_key, truncate="END"
-                )
-            except Exception as excecao:
-                raise ErroProvedorEmbedding(
-                    _descrever_falha_de_provedor(
-                        "falha ao inicializar o provedor de embedding", excecao
-                    ),
-                    operacional=falha_operacional(excecao),
-                ) from None
+        if cliente is None and not api_key:
+            raise ValueError("api_key é obrigatória sem um cliente injetado")
         self._cliente = cliente
+        self._api_key = api_key
         self._dimensao = dimensao
         self._modelo = modelo
 
@@ -658,6 +647,30 @@ class ProvedorEmbeddingNvidia:
     @property
     def modelo(self) -> str:
         return self._modelo
+
+    def _obter_cliente(self):
+        """Inicializa a integração somente quando o RAG precisar de embedding.
+
+        A descoberta de startups não usa vetores. Adiar este cliente impede
+        que uma indisponibilidade NVIDIA bloqueie uma busca que depende apenas
+        do Query Planner e do FTS5.
+        """
+        if self._cliente is not None:
+            return self._cliente
+        try:
+            self._cliente = NVIDIAEmbeddings(
+                model=self._modelo,
+                nvidia_api_key=self._api_key,
+                truncate="END",
+            )
+        except Exception as excecao:
+            raise ErroProvedorEmbedding(
+                _descrever_falha_de_provedor(
+                    "falha ao inicializar o provedor de embedding", excecao
+                ),
+                operacional=falha_operacional(excecao),
+            ) from None
+        return self._cliente
 
     def _validar(self, vetores: list[list[float]], esperados: int) -> list[list[float]]:
         if len(vetores) != esperados:
@@ -680,7 +693,7 @@ class ProvedorEmbeddingNvidia:
 
     def embutir_passagens(self, textos: list[str]) -> list[list[float]]:
         try:
-            vetores = self._cliente.embed_documents(textos)
+            vetores = self._obter_cliente().embed_documents(textos)
         except Exception as excecao:
             raise ErroProvedorEmbedding(
                 _descrever_falha_de_provedor(
@@ -692,7 +705,7 @@ class ProvedorEmbeddingNvidia:
 
     def embutir_consulta(self, texto: str) -> list[float]:
         try:
-            vetor = self._cliente.embed_query(texto)
+            vetor = self._obter_cliente().embed_query(texto)
         except Exception as excecao:
             raise ErroProvedorEmbedding(
                 _descrever_falha_de_provedor(
@@ -713,19 +726,29 @@ class ProvedorRerankNvidia:
         modelo: str = MODELO_RERANK_NVIDIA,
         cliente: object | None = None,
     ):
-        if cliente is None:
-            if not api_key:
-                raise ValueError("api_key é obrigatória sem um cliente injetado")
-            try:
-                cliente = NVIDIARerank(model=modelo, nvidia_api_key=api_key)
-            except Exception as excecao:
-                raise ErroProvedorRerank(
-                    _descrever_falha_de_provedor(
-                        "falha ao inicializar o reranker NVIDIA", excecao
-                    ),
-                    operacional=falha_operacional(excecao),
-                ) from None
+        if cliente is None and not api_key:
+            raise ValueError("api_key é obrigatória sem um cliente injetado")
         self._cliente = cliente
+        self._api_key = api_key
+        self._modelo = modelo
+
+    def _obter_cliente(self):
+        """Inicializa o reranker somente no aprofundamento aderente."""
+        if self._cliente is not None:
+            return self._cliente
+        try:
+            self._cliente = NVIDIARerank(
+                model=self._modelo,
+                nvidia_api_key=self._api_key,
+            )
+        except Exception as excecao:
+            raise ErroProvedorRerank(
+                _descrever_falha_de_provedor(
+                    "falha ao inicializar o reranker NVIDIA", excecao
+                ),
+                operacional=falha_operacional(excecao),
+            ) from None
+        return self._cliente
 
     def reordenar(self, consulta: str, textos: list[str]) -> list[float]:
         documentos = [
@@ -733,8 +756,9 @@ class ProvedorRerankNvidia:
             for indice, texto in enumerate(textos)
         ]
         try:
-            self._cliente.top_n = len(textos)
-            resultado = self._cliente.compress_documents(documentos, consulta)
+            cliente = self._obter_cliente()
+            cliente.top_n = len(textos)
+            resultado = cliente.compress_documents(documentos, consulta)
         except Exception as excecao:
             raise ErroProvedorRerank(
                 _descrever_falha_de_provedor("falha do reranker NVIDIA", excecao),

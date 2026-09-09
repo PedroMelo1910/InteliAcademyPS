@@ -9,6 +9,7 @@ cometer na frente de um avaliador.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -27,7 +28,7 @@ ROTULO_EVIDENCIA_INSUFICIENTE = "Evidência insuficiente"
 ROTULO_AUSENTE = "Análise ainda não disponível"
 
 EXPLICACAO_CONCLUIDA = (
-    "Classe e fit-score foram validados pela rubrica e ficaram gravados no cache."
+    "A classificação e a pontuação foram verificadas e salvas nesta análise."
 )
 EXPLICACAO_CONCLUIDA_NON_AI = (
     "O zero é o resultado validado da rubrica para uma empresa que não usa IA "
@@ -160,6 +161,16 @@ TOM_DA_CLASSE = "violet"
 
 TOTAL_MAXIMO_FIT_SCORE = 100
 
+# A rubrica usa uma escala pública comum, mas os tetos brutos são diferentes:
+# momento chega a 9 e alinhamento setorial a 7. Exibir todos como "/10" faria
+# a interface prometer pontos que a função determinística nunca pode conceder.
+MAXIMO_POR_PILAR = {
+    "centralidade_ia": 10,
+    "gap_enderecavel": 10,
+    "momento": 9,
+    "alinhamento_setorial": 7,
+}
+
 
 def tom_do_status(resumo: ResumoCandidata) -> str:
     """Cor do selo de situação, derivada do rótulo já decidido acima."""
@@ -198,13 +209,145 @@ def fracao_do_fit_score(total: int) -> float:
     return total / TOTAL_MAXIMO_FIT_SCORE
 
 
+def maximo_do_pilar(pilar: str) -> int:
+    """Retorna o teto bruto congelado da rubrica para apresentação."""
+    return MAXIMO_POR_PILAR[pilar]
+
+
 ROTULO_FUNDAMENTO = {
-    "gap_confirmado": "Gap endereçado",
+    "gap_confirmado": "Necessidade confirmada",
     "oportunidade_confirmada": "Oportunidade confirmada",
 }
 
 
+# Os contratos mantêm seus identificadores estáveis. Só a apresentação os
+# traduz: a mesma leitura deve aparecer na tela e no arquivo baixado.
+ROTULOS = {
+    "query_planner": "Entendimento da busca",
+    "retriever": "Busca de documentos",
+    "extractor": "Leitura das evidências",
+    "classifier": "Classificação da startup",
+    "evidence_validator": "Verificação das evidências",
+    "nvidia_rag": "Consulta à base NVIDIA",
+    "recommendation": "Elaboração de recomendações",
+    "briefing": "Preparação do briefing",
+    "R1": "Triagem da busca",
+    "R2": "Revisão das evidências",
+    "R3": "Decisão da análise",
+    "analisar": "Análise selecionada",
+    "candidatas_prontas": "Startups encontradas",
+    "relaxar": "Ampliação dos critérios da busca",
+    "sem_resultado": "Nenhuma startup encontrada",
+    "reextrair": "Nova leitura das evidências",
+    "evidencia_pronta": "Evidências verificadas",
+    "evidencia_insuficiente": "Evidência insuficiente",
+    "nao_aderente": "Sem aderência nesta análise",
+    "prosseguir": "Detalhamento autorizado",
+    "concluida": "Análise concluída",
+    "ausente": "Análise ainda não disponível",
+    "setor": "Setor",
+    "estagio": "Estágio",
+    "localizacao": "Localização",
+    "tamanho_time": "Tamanho da equipe",
+    "classe_analisada": "Classificação",
+    "dados_proprietarios": "Dados próprios",
+    "workflow_profundo": "Integração aos processos do cliente",
+    "distribuicao": "Distribuição do produto",
+    "otimizacao_tecnica": "Otimização técnica",
+    "stack_propria": "Tecnologia própria",
+    "dependencia_api_externa": "Dependência de serviços externos de IA",
+    "escala_e_dor_operacional": "Escala e dificuldades operacionais",
+    "momento_e_financiamento": "Momento da empresa e financiamento",
+    "equipe_e_contratacao": "Equipe e contratação",
+    "outro": "Outras informações",
+    "presenca": "Capacidade observada",
+    "ausencia_explicita": "Ausência declarada pela fonte",
+    "neutro": "Informação contextual",
+    "confirmada": "Referência confirmada",
+    "derrubada": "Referência não confirmada",
+    "capacidade_confirmada": "Capacidade confirmada",
+    "gap_confirmado": "Necessidade confirmada",
+    "desconhecido": "Informação ainda não confirmada",
+    "oportunidade_confirmada": "Oportunidade confirmada",
+    "inferencia_llm": "Uso de modelos de linguagem",
+    "treinamento_ou_finetuning": "Treinamento ou adaptação de modelos",
+    "voz_fala_ou_transcricao": "Voz, fala ou transcrição",
+    "dados_em_escala": "Processamento de grandes volumes de dados",
+    "machine_learning_classico": "Aprendizado de máquina tradicional",
+    "visao_computacional": "Visão computacional",
+    "robotica_ou_simulacao": "Robótica ou simulação",
+    "imagem_medica": "Análise de imagens médicas",
+    "agentes_com_acoes_ou_controles": "Agentes de IA com ações ou controles",
+    "ciberseguranca_em_escala": "Cibersegurança em grande escala",
+    "convite_inception": "Convite ao NVIDIA Inception",
+    "call_tecnica_descoberta": "Conversa técnica inicial",
+    "benchmark_custo_latencia": "Comparação de custo e tempo de resposta",
+    "poc_nim": "Teste de viabilidade com NVIDIA NIM",
+    "workshop_guardrails": "Oficina sobre controles para IA",
+    "intro_comunidade_evento": "Apresentação à comunidade ou a um evento",
+    "alta": "Alta",
+    "media": "Média",
+    "baixa": "Baixa",
+    "normal": "Regular",
+    "centralidade_ia": "Importância da IA no produto",
+    "gap_enderecavel": "Necessidade que pode ser atendida",
+    "momento": "Momento da empresa",
+    "alinhamento_setorial": "Afinidade do setor",
+    "gate_evidencia": "Pontuação limitada pela evidência disponível",
+    "teto_corrobacao": "Pontuação limitada pela confirmação entre fontes",
+    "gate_non_ai": "Pontuação zero pela classificação sem IA no produto",
+    "tecnologia": "Tecnologia NVIDIA",
+    "conceitual": "Base conceitual",
+    "site institucional": "site institucional",
+    "blog": "blog",
+    "notícia": "notícia",
+    "vaga": "vaga",
+    "perfil de founder": "perfil da pessoa fundadora",
+    "release": "comunicado à imprensa",
+    "AI-native": "AI-native",
+    "AI-enabled": "AI-enabled",
+    "non-AI": "non-AI",
+}
+
+
+def rotulo(valor: str) -> str:
+    """Lê um valor fechado sem expor identificadores desconhecidos na tela."""
+    return ROTULOS.get(valor, "Informação adicional")
+
+
+# Texto livre permanece texto livre: apenas identificadores inequivocamente
+# técnicos são substituídos. Palavras comuns como "normal" não são alteradas.
+_TOKENS_EM_TEXTO = {
+    token.casefold(): label
+    for token, label in ROTULOS.items()
+    if "_" in token
+    or token in {"extractor", "classifier", "retriever", "recommendation", "R1", "R2", "R3"}
+}
+_PADRAO_TOKENS = re.compile(
+    r"(?<!\w)(?:"
+    + "|".join(re.escape(token) for token in sorted(_TOKENS_EM_TEXTO, key=len, reverse=True))
+    + r")(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def texto_legivel(texto: str) -> str:
+    """Traduz tokens de mensagens; nunca usar em citações ou metadados de fonte.
+
+    Não interpreta nem escapa Markdown. Quem renderiza continua responsável
+    pelo escape; assim uma tradução não transforma texto em HTML ou link.
+    """
+    return _PADRAO_TOKENS.sub(
+        lambda trecho: _TOKENS_EM_TEXTO[trecho.group().casefold()], texto
+    )
+
+
+def trajeto_legivel(valores: Iterable[str]) -> str:
+    """Mostra as etapas executadas, preservando sua ordem e suas repetições."""
+    return " → ".join(rotulo(valor) for valor in valores)
+
+
 def rotular_fundamento(recomendacao) -> str:
     """Nomeia o fundamento sem transformar carga de trabalho em deficiência."""
-    rotulo = ROTULO_FUNDAMENTO[recomendacao.tipo_fundamento]
-    return f"{rotulo}: {recomendacao.identificador_fundamento}"
+    fundamento = ROTULO_FUNDAMENTO[recomendacao.tipo_fundamento]
+    return f"{fundamento}: {rotulo(recomendacao.identificador_fundamento)}"

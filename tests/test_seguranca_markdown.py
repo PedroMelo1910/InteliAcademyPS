@@ -355,7 +355,7 @@ def test_o_arquivo_protege_site_fontes_e_citacoes():
 # ----------------------------------------------------------------------
 
 
-def test_a_tela_usa_o_destino_protegido_no_documento_recuperado():
+def test_documento_recuperado_nao_injeta_link_quando_nao_e_exibido_no_ranking():
     documento = documento_falso(10, 1, url_fonte=CARGA_BUGBOT)
     item = item_concluido_ia()
     from dataclasses import replace
@@ -367,6 +367,6 @@ def test_a_tela_usa_o_destino_protegido_no_documento_recuperado():
     tela = textos(teste)
 
     assert not teste.exception
-    assert destino_markdown(CARGA_BUGBOT) in tela
+    assert destino_markdown(CARGA_BUGBOT) not in tela
     assert "attacker.example/pixel)" not in tela
     assert "![x]" not in tela

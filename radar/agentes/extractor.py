@@ -505,8 +505,7 @@ class Extractor:
             else f"Startup analisada: id {id_startup}."
         )
         blocos = "\n\n".join(
-            f"[documento {documento.id_documento} | tipo: {documento.tipo} | "
-            f"título informativo (proibido citar): {documento.titulo}]\n"
+            f"[documento {documento.id_documento} | tipo: {documento.tipo}]\n"
             f"CONTEUDO_TEXTO (única área válida para trecho_citado):\n"
             f"{documento.conteudo_texto}"
             for documento in documentos

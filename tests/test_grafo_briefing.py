@@ -501,6 +501,8 @@ def test_segunda_invocacao_reaproveita_o_plano_sem_novo_query_planner(
     assert provedor_plano.chamadas == 1
     assert aprofundamento.briefing.variante == "normal"
     assert aprofundamento.plano == descoberta.plano
+    assert aprofundamento.perfil_validado is not None
+    assert aprofundamento.fit_score is not None
 
 
 def test_segunda_invocacao_exige_startup_vinda_da_descoberta(tmp_path, caminho_banco):

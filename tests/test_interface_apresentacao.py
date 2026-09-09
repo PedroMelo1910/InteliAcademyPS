@@ -10,15 +10,19 @@ renderizáveis e o único HTML bruto da aplicação é uma folha de estilo liter
 from __future__ import annotations
 
 import ast
+import re
+import tomllib
 
 import pytest
 
 from radar.configuracao import RAIZ_PROJETO
+from radar.contratos import FitScore, PilarFitScore
 from radar.interface import mensagens
 from radar.interface.tema import CSS_TEMA
 from tests.apoio_interface import (
     AplicacaoFalsa,
     CONSULTA_PADRAO,
+    aprofundamento_falso,
     abrir_ranking,
     briefing_na_tela,
     descoberta_falsa,
@@ -31,9 +35,11 @@ from tests.apoio_interface import (
     textos,
 )
 from tests.conftest import (
+    afirmacao_validada_falsa,
     briefing_insuficiente_falso,
     briefing_nao_aderente_falso,
     briefing_normal_falso,
+    perfil_validado_falso,
 )
 
 def botoes_de_exemplo(teste):
@@ -45,13 +51,14 @@ def botoes_de_exemplo(teste):
 # ----------------------------------------------------------------------
 
 
-def test_a_abertura_declara_o_produto_e_o_proposito_em_uma_frase():
+def test_a_abertura_mostra_apenas_a_identidade_principal_do_produto():
     teste = montar(AplicacaoFalsa())
 
     tela = textos(teste)
 
     assert mensagens.NOME_PRODUTO in tela
-    assert mensagens.PROPOSITO in tela
+    assert "Inteligência para Startups & VCs" not in tela
+    assert "Encontre startups brasileiras" not in tela
 
 
 def test_a_abertura_oferece_de_duas_a_tres_perguntas_de_exemplo():
@@ -80,31 +87,56 @@ def test_os_exemplos_saem_de_cena_depois_que_existe_um_ranking():
     assert botoes_de_exemplo(teste) == []
 
 
+def test_menu_lateral_alterna_entre_radar_e_dashboard_no_mesmo_app():
+    teste = montar(AplicacaoFalsa())
+
+    navegacao = teste.sidebar.radio[0]
+
+    assert navegacao.options == [mensagens.PAGINA_RADAR, mensagens.PAGINA_DASHBOARD]
+    assert navegacao.value == mensagens.PAGINA_RADAR
+
+    navegacao.set_value(mensagens.PAGINA_DASHBOARD).run()
+    tela = textos(teste)
+
+    assert not teste.exception
+    assert mensagens.TITULO_DASHBOARD in tela
+    assert "Startups: 30" in tela
+    assert "Fit-score médio: 23.0/100" in tela
+    assert mensagens.ROTULO_BUSCAR not in tela
+
+
+def test_inicializacao_da_aplicacao_nao_expoe_nome_de_funcao_no_carregamento():
+    fonte = (RAIZ_PROJETO / "app.py").read_text(encoding="utf-8")
+
+    assert "@st.cache_resource(show_spinner=False)" in fonte
+    assert mensagens.MENSAGEM_CARREGANDO_BUSCA == "Carregando..."
+    assert mensagens.MENSAGEM_CARREGANDO_ANALISE == "Carregando..."
+
+
 # ----------------------------------------------------------------------
 # 2. Painel do ranking
 # ----------------------------------------------------------------------
 
 
-def test_o_painel_do_ranking_conta_cada_estado_de_analise():
+def test_as_contagens_ficam_no_dashboard_e_nao_atrasam_o_ranking():
     teste = abrir_ranking(AplicacaoFalsa())
 
     tela = textos(teste)
 
-    assert f"{mensagens.ROTULO_TOTAL_CANDIDATAS}: 4" in tela
-    assert f"{mensagens.ROTULO_TOTAL_ANALISADAS}: 2" in tela
-    assert f"{mensagens.ROTULO_TOTAL_SEM_LASTRO}: 1" in tela
-    assert f"{mensagens.ROTULO_TOTAL_PENDENTES}: 1" in tela
+    assert "Candidatas: 4" not in tela
+    assert "Com análise gravada: 2" not in tela
+    assert mensagens.TITULO_RANKING in tela
 
 
-def test_as_duas_medidas_aparecem_rotuladas_e_explicadas_em_separado():
+def test_o_ranking_mostra_fit_score_sem_expor_o_indice_textual():
     teste = abrir_ranking(AplicacaoFalsa())
 
     tela = textos(teste)
 
     assert mensagens.ROTULO_FIT_SCORE in tela
-    assert mensagens.ROTULO_BM25 in tela
-    assert mensagens.EXPLICACAO_FIT_SCORE in tela
-    assert mensagens.EXPLICACAO_BM25 in tela
+    assert "Correspondência com a busca" not in tela
+    assert "menor é mais próximo" not in tela
+    assert "índice textual" not in tela
 
 
 def test_a_ordem_e_os_numeros_do_ranking_vem_prontos_da_aplicacao():
@@ -140,7 +172,7 @@ def test_o_gate_non_ai_aparece_como_zero_deliberado_e_nao_como_erro():
 # ----------------------------------------------------------------------
 
 
-def test_a_analise_organiza_o_briefing_em_quatro_seccoes_claras():
+def test_a_analise_organiza_o_briefing_em_tres_seccoes_claras():
     teste = briefing_na_tela(briefing_normal_falso())
 
     abas = [aba.label for aba in teste.tabs]
@@ -149,7 +181,6 @@ def test_a_analise_organiza_o_briefing_em_quatro_seccoes_claras():
         mensagens.ABA_VISAO_GERAL,
         mensagens.ABA_EVIDENCIAS,
         mensagens.ABA_RECOMENDACOES,
-        mensagens.ABA_RASTRO,
     ]
 
 
@@ -163,18 +194,98 @@ def test_uma_variante_sem_recomendacao_nao_abre_a_aba_de_recomendacao(construtor
 
     assert mensagens.ABA_RECOMENDACOES not in abas
     assert mensagens.ABA_VISAO_GERAL in abas
-    assert mensagens.ABA_RASTRO in abas
+    assert "Como chegamos ao resultado" not in abas
 
 
-def test_a_tese_e_a_sintese_aparecem_antes_do_detalhe_tecnico():
+def test_a_tese_e_a_sintese_aparecem_na_visao_geral():
     briefing = briefing_normal_falso()
 
     teste = briefing_na_tela(briefing)
     tela = textos(teste)
 
-    assert tela.index(briefing.veredito.tese) < tela.index(
-        briefing.rodape.versao_rubrica
+    assert briefing.veredito.tese in tela
+    assert briefing.sintese_executiva.texto in tela
+    assert briefing.rodape.versao_rubrica not in tela
+
+
+def test_a_analise_mostra_evidencias_gaps_e_pilares_em_linguagem_humana():
+    perfil = perfil_validado_falso(
+        [
+            afirmacao_validada_falsa(1, "workflow_profundo"),
+            afirmacao_validada_falsa(
+                2, "distribuicao", polaridade="ausencia_explicita"
+            ),
+            afirmacao_validada_falsa(
+                3, "outro", situacao="derrubada"
+            ),
+        ]
     )
+    pontos = (3, 0, 1, 3)
+    pilares = [
+        PilarFitScore(
+            pilar=nome,
+            pontos=valor,
+            faixa="baixa",
+        )
+        for nome, valor in zip(
+            (
+                "centralidade_ia",
+                "gap_enderecavel",
+                "momento",
+                "alinhamento_setorial",
+            ),
+            pontos,
+            strict=True,
+        )
+    ]
+    fit_score = FitScore(
+        total=round(100 * sum(pontos) / 36),
+        pilares=pilares,
+        estado_dimensoes_gap=perfil.estado_dimensoes_gap,
+        justificativa_curta="Pontuação determinística baseada em evidências.",
+        versao_rubrica="rubrica-v1",
+    )
+    aplicacao = AplicacaoFalsa(
+        aprofundamento=aprofundamento_falso(
+            perfil_validado=perfil,
+            fit_score=fit_score,
+        )
+    )
+    teste = abrir_ranking(aplicacao)
+    tela = textos(teste.button(key="aprofundar_1").click().run())
+
+    assert mensagens.TITULO_EVIDENCIAS_CONFIRMADAS in tela
+    assert mensagens.TITULO_NECESSIDADES in tela
+    assert mensagens.TITULO_EVIDENCIAS_DESCARTADAS in tela
+    assert "Integração aos processos do cliente" in tela
+    assert "Distribuição do produto" in tela
+    assert "Importância da IA no produto" in tela
+    assert "3/10" in tela
+    assert "0/10" in tela
+    assert "1/9" in tela
+    assert "3/7" in tela
+    assert "workflow_profundo" not in tela
+    assert "gap_enderecavel" not in tela
+
+
+def test_a_tela_avisa_quando_a_analise_atual_diverge_do_ranking_salvo():
+    teste = briefing_na_tela(briefing_normal_falso())
+
+    assert mensagens.AVISO_CACHE_ATUAL in textos(teste)
+    assert mensagens.AVISO_CACHE_DIVERGENTE in textos(teste)
+
+
+def test_analise_sem_cache_anterior_nao_afirma_que_o_ranking_usou_cache():
+    item = item_ausente(posicao=1, id_startup=4, nome="Mombak")
+    aplicacao = AplicacaoFalsa(
+        descoberta=descoberta_falsa(itens=(item,)),
+        aprofundamento=aprofundamento_falso(4, briefing=briefing_normal_falso()),
+    )
+    teste = abrir_ranking(aplicacao)
+    tela = textos(teste.button(key="aprofundar_4").click().run())
+
+    assert mensagens.AVISO_CACHE_ATUAL not in tela
+    assert mensagens.AVISO_CACHE_DIVERGENTE not in tela
 
 
 def test_voltar_ao_ranking_nao_refaz_a_busca_nem_a_analise():
@@ -346,6 +457,37 @@ def test_a_folha_de_estilo_nao_carrega_script_nem_recurso_remoto():
         assert proibido not in minusculo
 
 
+def test_o_tema_streamlit_e_claro_com_cartoes_brancos_e_acento_verde():
+    caminho = RAIZ_PROJETO / ".streamlit" / "config.toml"
+    configuracao = tomllib.loads(caminho.read_text(encoding="utf-8"))["theme"]
+
+    assert configuracao["base"] == "light"
+    assert configuracao["secondaryBackgroundColor"] == "#FFFFFF"
+    assert configuracao["primaryColor"] == "#76B900"
+    assert configuracao["textColor"] != configuracao["backgroundColor"]
+
+
+def test_as_telas_de_uso_nao_expoem_tokens_internos_nem_funcoes_python():
+    ranking = textos(abrir_ranking(AplicacaoFalsa()))
+    detalhe = textos(briefing_na_tela(briefing_normal_falso()))
+    conteudo = ranking + "\n" + detalhe
+
+    for proibido in (
+        "query_planner",
+        "retriever",
+        "extractor",
+        "classifier",
+        "evidence_validator",
+        "nvidia_rag",
+        "gap_confirmado",
+        "evidencia_insuficiente",
+        "nao_aderente",
+        "tentativas_extracao",
+    ):
+        assert proibido not in conteudo
+    assert re.search(r"\b[a-z_]+\(\)", conteudo) is None
+
+
 def test_a_folha_de_estilo_nunca_vaza_para_o_texto_da_tela():
     teste = abrir_ranking(AplicacaoFalsa())
 
@@ -369,14 +511,12 @@ def test_a_tela_nao_ordena_nao_recalcula_e_nao_consulta_o_banco(proibido):
 
 
 # ----------------------------------------------------------------------
-# 7. O título e a legenda do ranking descrevem a ordem que a aplicação usa
+# 7. O título e a legenda explicam a priorização sem jargão técnico
 # ----------------------------------------------------------------------
 #
-# A ordem real de ``construir_ranking`` é (grupo, -fit_score, bm25, nome, id):
-# análise concluída antes de insuficiente/ausente, fit-score NVIDIA decrescente,
-# e relevância lexical só como desempate. Chamar isso de "ordem de recuperação"
-# contradiz a própria tela, que define recuperação como o eixo BM25 em
-# ``EXPLICACAO_BM25``. Estes testes prendem a redação ao algoritmo.
+# A aplicação mantém a regra completa de ordenação. Na tela, o avaliador precisa
+# apenas distinguir aderência NVIDIA de relação com a pergunta, sem ler o nome
+# do algoritmo nem um número negativo difícil de interpretar.
 
 
 def test_titulo_do_ranking_nao_promete_ordem_de_recuperacao():
@@ -387,15 +527,9 @@ def test_titulo_do_ranking_nao_promete_ordem_de_recuperacao():
 def test_legenda_do_ranking_descreve_a_ordem_real():
     legenda = mensagens.LEGENDA_RANKING.casefold()
 
-    # o critério primário, nomeado como o usuário o vê na tela
     assert "fit-score" in legenda
-    # o desempate, nomeado sem se confundir com o critério primário
-    assert "desempat" in legenda
-    assert "relevância lexical" in legenda
-    # o que acontece com quem não tem análise gravada
-    assert "depois" in legenda
-    # a promessa de honestidade que já existia não pode se perder
-    assert "recalcula" in legenda
+    assert "relação" in legenda
+    assert "bm25" not in legenda
 
 
 def test_a_legenda_do_ranking_e_verdadeira_sobre_a_ordem_construida():

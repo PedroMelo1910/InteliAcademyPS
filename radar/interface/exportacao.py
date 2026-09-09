@@ -12,7 +12,12 @@ import re
 import unicodedata
 from datetime import date
 
-from radar.interface.rotulos import rotular_fundamento
+from radar.interface.rotulos import (
+    rotulo,
+    rotular_fundamento,
+    texto_legivel,
+    trajeto_legivel,
+)
 from radar.interface.texto import destino_markdown, escapar_markdown
 from radar.contratos import (
     Briefing,
@@ -35,17 +40,17 @@ RESUMO_DA_VARIANTE = {
         "Startup aderente: há oportunidade NVIDIA sustentada por evidência pública."
     ),
     "nao_aderente": (
-        "Empresa sem uso de IA no produto: a stack NVIDIA não se aplica a ela."
+        "Classificação técnica non-AI: o material validado não habilita uma "
+        "recomendação NVIDIA nesta análise."
     ),
     # A §11.3 admite mais de um caminho até esta variante — zero afirmações
     # confirmadas, suporte da classe derrubado após o teto de reextração e
     # nenhuma recomendação com lastro. O cabeçalho é comum às três: quem nomeia
     # a causa é a síntese e os avisos já validados dentro do Briefing.
     "evidencia_insuficiente": (
-        "Evidência insuficiente: a base disponível não sustenta uma conclusão "
-        "sobre esta empresa. A causa específica está na síntese e nos avisos "
-        "deste briefing; o índice de fontes fica vazio porque nenhuma conclusão "
-        "desta variante cita afirmação."
+        "Evidência insuficiente: as fontes disponíveis não sustentam uma "
+        "conclusão segura sobre esta empresa. Veja abaixo o motivo e o que "
+        "faltou confirmar."
     ),
 }
 
@@ -144,7 +149,8 @@ def _pontos_de_conversa(pontos: list[ConclusaoAncorada]) -> str:
 
 def _avisos(avisos: list[str]) -> str:
     return "\n".join(
-        ["## Avisos", ""] + [f"- {escapar_markdown(aviso)}" for aviso in avisos]
+        ["## Limites desta análise", ""]
+        + [f"- {escapar_markdown(texto_legivel(aviso))}" for aviso in avisos]
     )
 
 
@@ -160,14 +166,14 @@ def _uma_recomendacao(ordem: int, recomendacao: Recomendacao) -> str:
         f"### {ordem}. {rotular_fundamento(recomendacao)}",
         "",
         f"- **Tecnologias NVIDIA:** {', '.join(recomendacao.tecnologias)}",
-        f"- **Prioridade:** {recomendacao.prioridade}",
-        f"- **Complexidade:** {recomendacao.complexidade}",
+        f"- **Prioridade:** {rotulo(recomendacao.prioridade)}",
+        f"- **Complexidade:** {rotulo(recomendacao.complexidade)}",
         "- **Justificativa técnica:** "
         + escapar_markdown(recomendacao.justificativa_tecnica),
         "- **Justificativa de negócio:** "
         + escapar_markdown(recomendacao.justificativa_negocio),
         (
-            f"- **Próxima ação ({recomendacao.proxima_acao.tipo_acao}):** "
+            f"- **Próxima ação — {rotulo(recomendacao.proxima_acao.tipo_acao)}:** "
             + escapar_markdown(recomendacao.proxima_acao.detalhe)
         ),
         "",
@@ -185,7 +191,7 @@ def _uma_evidencia(evidencia: EvidenciaStartup) -> str:
         f"- Afirmação {evidencia.id_afirmacao} "
         f"(documento {evidencia.id_documento}): "
         f'"{escapar_markdown(evidencia.trecho_citado)}" — '
-        f"[fonte da afirmação {evidencia.id_afirmacao}]"
+        f"[abrir fonte pública]"
         f"({destino_markdown(evidencia.url_fonte)})"
     )
 
@@ -194,11 +200,11 @@ def _uma_citacao(citacao: CitacaoNvidia) -> str:
     partes = [f"- Chunk {citacao.id_chunk}"]
     if citacao.tecnologia is not None:
         partes.append(citacao.tecnologia)
-    partes.append(f"origem: {citacao.origem}")
-    partes.append(f"tópico: {escapar_markdown(citacao.topico)}")
-    partes.append(f"trilha: {escapar_markdown(citacao.breadcrumb)}")
+    partes.append(f"tipo: {rotulo(citacao.origem)}")
+    partes.append(f"assunto: {escapar_markdown(citacao.topico)}")
+    partes.append(f"seção: {escapar_markdown(citacao.breadcrumb)}")
     partes.append(
-        f"[chunk NVIDIA {citacao.id_chunk}]({destino_markdown(citacao.fonte_url)})"
+        f"[abrir fonte NVIDIA]({destino_markdown(citacao.fonte_url)})"
     )
     return " — ".join(partes)
 
@@ -209,7 +215,7 @@ def _fontes(fontes: list[FonteBriefing]) -> str:
         linha = (
             f"- [{escapar_markdown(fonte.titulo)}]"
             f"({destino_markdown(fonte.url_fonte)}) — "
-            f"{escapar_markdown(fonte.host_normalizado)} — {fonte.tipo}"
+            f"{escapar_markdown(fonte.host_normalizado)} — {rotulo(fonte.tipo)}"
         )
         if fonte.data_publicacao is not None:
             linha += f" — publicado em {_data(fonte.data_publicacao)}"
@@ -221,12 +227,12 @@ def _auditoria(rodape: RodapeBriefing) -> str:
     linhas = [
         "## Auditoria da execução",
         "",
-        f"- **Versão da rubrica:** {rodape.versao_rubrica}",
+        f"- **Versão da regra de pontuação:** {rodape.versao_rubrica}",
         f"- **Data de execução:** {_data(rodape.data_execucao)}",
         f"- **Afirmações confirmadas:** {rodape.afirmacoes_confirmadas}",
         f"- **Afirmações derrubadas:** {rodape.afirmacoes_derrubadas}",
-        f"- **Rota terminal (R3):** {rodape.rota_r3}",
-        f"- **Trajeto do grafo:** {' → '.join(rodape.trajeto)}",
+        f"- **Resultado da conferência:** {rotulo(rodape.rota_r3)}",
+        f"- **Etapas da análise:** {trajeto_legivel(rodape.trajeto)}",
     ]
     return "\n".join(linhas)
 

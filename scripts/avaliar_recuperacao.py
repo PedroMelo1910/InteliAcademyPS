@@ -1,10 +1,11 @@
-"""Avaliação leve da recuperação da KB NVIDIA, antes e depois do reranking.
+"""Avaliação leve da recuperação da KB NVIDIA, antes e depois do pipeline final.
 
 Uso: ``python -m scripts.avaliar_recuperacao``
 
 Para cada caso rotulado à mão em ``dados/avaliacao_rag.json``, compara:
 - baseline: top-6 da fusão RRF (lexical + vetorial), sem reranking;
-- final:    top-6 devolvido por ``ConhecimentoNvidia.consultar`` (com reranking).
+- final:    top-6 devolvido por ``ConhecimentoNvidia.consultar`` (reranking e
+  guarda de cobertura para tecnologia explicitamente autorizada).
 
 Métricas: hit@6 e posição da primeira ocorrência da tecnologia esperada.
 Amostra pequena e original: orienta iteração, sem alegar significância
@@ -110,15 +111,15 @@ def principal() -> int:
         soma_rr_antes += 1.0 / pos_antes if pos_antes else 0.0
         soma_rr_depois += 1.0 / pos_depois if pos_depois else 0.0
         print(
-            f"[{esperada}] antes: {pos_antes or '-'} | depois: {pos_depois or '-'} | "
+            f"[{esperada}] RRF: {pos_antes or '-'} | final: {pos_depois or '-'} | "
             f"{consulta[:60]}"
         )
 
     total = len(casos)
-    print(f"\nhit@{N_TRECHOS_FINAL} antes do reranking:  {hits_antes}/{total}")
-    print(f"hit@{N_TRECHOS_FINAL} depois do reranking: {hits_depois}/{total}")
-    print(f"MRR antes:  {soma_rr_antes / total:.3f}")
-    print(f"MRR depois: {soma_rr_depois / total:.3f}")
+    print(f"\nhit@{N_TRECHOS_FINAL} na fusão RRF:      {hits_antes}/{total}")
+    print(f"hit@{N_TRECHOS_FINAL} no pipeline final: {hits_depois}/{total}")
+    print(f"MRR na fusão RRF:      {soma_rr_antes / total:.3f}")
+    print(f"MRR no pipeline final: {soma_rr_depois / total:.3f}")
     return 0
 
 

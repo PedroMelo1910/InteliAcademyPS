@@ -1,15 +1,12 @@
 """Folha de estilo estática do radar: um literal, sem nenhuma interpolação.
 
-A direção visual tem uma ideia só, e ela é funcional: **dois eixos de cor que
-nunca se encontram**. Verde NVIDIA pertence ao eixo da decisão — fit-score,
-ação primária, análise concluída. Azul pertence ao eixo da recuperação —
-relevância lexical BM25. Quem olha a tela numa gravação de sete minutos
-consegue separar "o quanto isso aderiu à stack NVIDIA" de "o quanto isso casou
-com o texto da busca" sem ler uma legenda.
+A direção visual tem uma ideia só, e ela é funcional: o verde NVIDIA pertence
+ao eixo da decisão — fit-score, ação primária e análise concluída. A relevância
+textual continua na ordenação, mas o seu índice interno não ocupa os cartões.
 
-Âmbar e cinza cobrem os desfechos honestos (sem lastro, sem análise) e vermelho
-fica reservado à falha operacional. O fundo é carvão, não preto: contraste alto
-sem o brilho duro que cansa numa apresentação projetada.
+Âmbar e cinza cobrem os desfechos honestos (sem lastro, sem análise), e vermelho
+fica reservado à falha operacional. O fundo é claro e levemente esverdeado,
+com cartões brancos e texto escuro para leitura confortável na apresentação.
 
 Este módulo não importa Streamlit e não recebe dado nenhum. ``CSS_TEMA`` é um
 literal justamente para que a fronteira de HTML bruto da aplicação seja
@@ -24,17 +21,19 @@ CSS_TEMA = """
 <style>
 :root{
   --radar-verde:#76B900;
-  --radar-verde-claro:#9BDD22;
-  --radar-verde-vidro:rgba(118,185,0,.10);
-  --radar-azul:#5B9DF9;
-  --radar-ambar:#E0A32E;
-  --radar-cinza:#7C889B;
-  --radar-fundo:#0D1015;
-  --radar-superficie:#151A21;
-  --radar-superficie-alta:#1B222C;
-  --radar-borda:#28313E;
-  --radar-texto:#E9EDF3;
-  --radar-texto-suave:#9AA5B7;
+  --radar-verde-claro:#96D329;
+  --radar-verde-escuro:#315B08;
+  --radar-verde-vidro:rgba(118,185,0,.09);
+  --radar-azul:#356F9C;
+  --radar-ambar:#B27600;
+  --radar-cinza:#75806F;
+  --radar-fundo:#F6F8F4;
+  --radar-superficie:#FFFFFF;
+  --radar-superficie-alta:#FBFDF9;
+  --radar-borda:#DDE5D8;
+  --radar-texto:#182017;
+  --radar-texto-suave:#5E695A;
+  --radar-sombra:0 10px 28px rgba(37,56,28,.07);
   --radar-passo:1.15rem;
 }
 
@@ -45,13 +44,39 @@ CSS_TEMA = """
   padding-top:1.9rem;
   padding-bottom:4.5rem;
 }
+[data-testid="stAppViewContainer"]{background:var(--radar-fundo);}
 [data-testid="stHeader"]{background:transparent;}
+[data-testid="stSidebar"]{
+  background:#FFFFFF;
+  border-right:1px solid var(--radar-borda);
+}
+[data-testid="stSidebar"] h3{color:var(--radar-verde);}
+[data-testid="stSidebar"] [role="radiogroup"] label{
+  border-radius:10px;
+  padding:.35rem .55rem;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover{
+  background:var(--radar-verde-vidro);
+}
+[data-testid="stSidebar"] button[kind="headerNoPadding"] [data-testid="stIconMaterial"],
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"]{
+  font-size:0;
+}
+[data-testid="stSidebar"] button[kind="headerNoPadding"] [data-testid="stIconMaterial"]::after,
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"]::after{
+  content:"☰";
+  color:var(--radar-verde-escuro);
+  font-family:Arial,sans-serif;
+  font-size:1.25rem;
+}
 /* O botão de deploy não pertence a uma demonstração de sete minutos. */
 [data-testid="stAppDeployButton"]{display:none;}
 
 h1,h2,h3,h4,h5{letter-spacing:-.015em;}
 h1{line-height:1.08;letter-spacing:-.03em;}
 hr{border-color:var(--radar-borda);}
+a{color:var(--radar-verde-escuro);text-underline-offset:2px;}
+:focus-visible{outline:3px solid rgba(118,185,0,.38)!important;outline-offset:2px;}
 
 /* --------------------------------------------------------------
    Faixa de abertura
@@ -60,6 +85,12 @@ hr{border-color:var(--radar-borda);}
   border-bottom:1px solid var(--radar-borda);
   padding-bottom:var(--radar-passo);
   margin-bottom:1.5rem;
+}
+.st-key-topo_radar h1{
+  color:var(--radar-verde);
+  font-size:clamp(2.2rem,4vw,3.45rem);
+  letter-spacing:-.035em;
+  margin:.35rem 0 1rem;
 }
 .st-key-etiqueta_produto p,
 .st-key-etiqueta_briefing p{
@@ -71,10 +102,26 @@ hr{border-color:var(--radar-borda);}
   margin-bottom:.15rem;
 }
 .st-key-proposito_produto p{
-  font-size:1.02rem;
+  font-size:1.08rem;
   line-height:1.55;
   color:var(--radar-texto-suave);
   max-width:68ch;
+}
+.st-key-como_funciona{
+  margin:.8rem 0 1.5rem;
+}
+[class*="st-key-passo_"]{
+  min-height:128px;
+  background:var(--radar-superficie);
+  border:1px solid var(--radar-borda);
+  border-radius:16px;
+  padding:1rem 1.05rem;
+  box-shadow:0 6px 18px rgba(37,56,28,.045);
+}
+[class*="st-key-passo_"] p{color:var(--radar-texto-suave);line-height:1.45;}
+[class*="st-key-numero_passo_"] p{
+  color:var(--radar-verde-escuro);font-weight:800;font-size:.78rem;
+  letter-spacing:.12em;text-transform:uppercase;
 }
 
 /* --------------------------------------------------------------
@@ -90,6 +137,7 @@ hr{border-color:var(--radar-borda);}
   background:var(--radar-superficie);
   border-radius:14px;
   padding:1.15rem 1.15rem .95rem;
+  box-shadow:var(--radar-sombra);
 }
 
 .st-key-exemplos_consulta{
@@ -136,6 +184,8 @@ hr{border-color:var(--radar-borda);}
   overflow:hidden;
   padding-left:1.3rem;
   transition:border-color .18s ease, background .18s ease;
+  box-shadow:var(--radar-sombra);
+  margin-bottom:.85rem;
 }
 [class*="st-key-cartao_"]::before,
 [class*="st-key-bloco_recomendacao_"]::before{
@@ -153,13 +203,22 @@ hr{border-color:var(--radar-borda);}
   background:var(--radar-superficie-alta);
 }
 [class*="st-key-posicao_"] p{
-  font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
-  font-size:1.65rem;
-  font-weight:700;
+  font-family:inherit;
+  font-size:1.2rem;
+  font-weight:600;
   line-height:1;
   color:var(--radar-verde);
   font-variant-numeric:tabular-nums;
   margin:0;
+}
+
+.st-key-metricas_dashboard{
+  background:var(--radar-superficie);
+  border:1px solid var(--radar-borda);
+  border-radius:14px;
+  padding:1rem 1.1rem .75rem;
+  box-shadow:var(--radar-sombra);
+  margin:1rem 0 1.6rem;
 }
 [class*="st-key-nome_"] p{
   font-size:1.26rem;
@@ -187,7 +246,8 @@ hr{border-color:var(--radar-borda);}
   border:1px solid var(--radar-borda);
   border-left:3px solid var(--radar-verde);
   border-radius:14px;
-  background:linear-gradient(180deg,var(--radar-verde-vidro),transparent 60%);
+  background:linear-gradient(135deg,#FFFFFF 0%,#F4FAEA 100%);
+  box-shadow:var(--radar-sombra);
   padding:1.3rem 1.35rem 1.1rem;
   margin-bottom:1.4rem;
 }
@@ -223,12 +283,35 @@ hr{border-color:var(--radar-borda);}
   border-radius:12px;
 }
 [data-testid="stMetricValue"]{font-variant-numeric:tabular-nums;}
-[data-testid="stProgress"] div[role="progressbar"] > div{
+[data-testid="stProgressBarTrack"]{
+  background:#E7EDE2;
+}
+[data-testid="stProgressBarTrack"] > div{
   background-image:linear-gradient(90deg,var(--radar-verde),var(--radar-verde-claro));
 }
 
+[class*="st-key-pilar_"],
+[class*="st-key-evidencia_"],
+[class*="st-key-necessidade_"]{
+  background:var(--radar-superficie);
+  border:1px solid var(--radar-borda);
+  border-radius:12px;
+  padding:.75rem .9rem;
+}
+
+[data-testid="stAlert"]{border-radius:12px;}
+[data-testid="stDownloadButton"] button{width:100%;}
+
 @media (max-width:1200px){
   [data-testid="stMainBlockContainer"]{padding-left:1.4rem;padding-right:1.4rem;}
+}
+@media (max-width:700px){
+  [data-testid="stMainBlockContainer"]{padding:1.05rem .9rem 3rem;}
+  h1{font-size:2rem!important;}
+  [class*="st-key-cartao_"],[class*="st-key-bloco_recomendacao_"]{padding-left:.9rem;}
+  .st-key-cabecalho_analise{padding:1rem;}
+  [data-testid="stTabs"] [role="tablist"]{gap:.65rem;overflow-x:auto;}
+  [data-testid="stTabs"] [role="tab"]{white-space:nowrap;}
 }
 @media (prefers-reduced-motion:reduce){
   [class*="st-key-cartao_"] > div{transition:none;}

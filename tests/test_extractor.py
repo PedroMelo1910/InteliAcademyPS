@@ -341,6 +341,18 @@ def test_prompt_identifica_a_startup_o_foco_e_proibe_ausencia_inferida(controlad
     assert "não invente uma afirmação de produto" in prompt
 
 
+def test_titulo_do_documento_nao_alimenta_a_extracao_de_evidencias(controlada):
+    """O título já causou uma citação não literal no caso real da Pix Force."""
+    provedor = ProvedorSequencial(perfil_valido(controlada))
+
+    Extractor(controlada.base, provedor)(estado(controlada))
+
+    prompt = provedor.ultimo_prompt
+    assert "Plataforma de inspeção visual" not in prompt
+    assert "CONTEUDO_TEXTO (única área válida para trecho_citado)" in prompt
+    assert TEXTO_SITE in prompt
+
+
 def test_o_extractor_nao_expoe_classe_referencia(controlada):
     provedor = ProvedorSequencial(perfil_valido(controlada))
     Extractor(controlada.base, provedor)(estado(controlada))

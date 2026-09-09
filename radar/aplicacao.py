@@ -25,7 +25,9 @@ from radar.contratos import (
     DocumentoRecuperado,
     EmpresaCandidata,
     EstadoRadar,
+    FitScore,
     PlanoConsulta,
+    PerfilValidado,
     ResultadoR1,
     ResultadoRecuperacao,
     StatusAnaliseRanking,
@@ -90,6 +92,7 @@ def construir_ranking(
     documentos_por_empresa: dict[int, list[DocumentoRecuperado]] = {}
     for documento in resultado.documentos:
         documentos_por_empresa.setdefault(documento.id_startup, []).append(documento)
+
     def melhor_bm25(empresa: EmpresaCandidata) -> float:
         return min(
             (
@@ -173,6 +176,8 @@ class SaidaAprofundamento:
     id_startup: int
     trajeto: tuple[str, ...]
     erros: tuple[str, ...]
+    perfil_validado: PerfilValidado | None = None
+    fit_score: FitScore | None = None
 
 
 class ErroAplicacao(RuntimeError):
@@ -258,12 +263,27 @@ class AplicacaoRadar:
                 "o grafo terminou sem briefing para a startup "
                 f"{id_startup}; nenhum resultado parcial é exposto"
             )
+        briefing = Briefing.model_validate(bruto)
+        perfil_bruto = estado_final.get("perfil_validado")
+        fit_bruto = estado_final.get("fit_score")
+        perfil = (
+            PerfilValidado.model_validate(perfil_bruto)
+            if perfil_bruto is not None
+            else None
+        )
+        fit_score = (
+            FitScore.model_validate(fit_bruto)
+            if fit_bruto is not None
+            else None
+        )
         return SaidaAprofundamento(
-            briefing=Briefing.model_validate(bruto),
+            briefing=briefing,
             plano=PlanoConsulta.model_validate(estado_final["plano_consulta"]),
             id_startup=id_startup,
             trajeto=tuple(estado_final.get("trajeto", [])),
             erros=tuple(estado_final.get("erros", [])),
+            perfil_validado=perfil,
+            fit_score=fit_score,
         )
 
 

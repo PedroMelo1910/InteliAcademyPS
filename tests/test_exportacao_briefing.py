@@ -27,6 +27,7 @@ from radar.interface.exportacao import (
     exportar_briefing_markdown,
     nome_arquivo_briefing,
 )
+from radar.interface.rotulos import rotulo, rotular_fundamento, trajeto_legivel
 from radar.interface.texto import destino_markdown, escapar_markdown
 from tests.apoio_interface import (
     AplicacaoFalsa,
@@ -139,13 +140,13 @@ def test_o_normal_traz_cada_campo_da_recomendacao():
 
     markdown = exportar_briefing_markdown(briefing)
 
-    assert recomendacao.identificador_fundamento in markdown
+    assert rotular_fundamento(recomendacao) in markdown
     assert recomendacao.tecnologias[0] in markdown
     assert recomendacao.justificativa_tecnica in markdown
     assert recomendacao.justificativa_negocio in markdown
-    assert recomendacao.prioridade in markdown
-    assert recomendacao.complexidade in markdown
-    assert recomendacao.proxima_acao.tipo_acao in markdown
+    assert rotulo(recomendacao.prioridade) in markdown
+    assert rotulo(recomendacao.complexidade) in markdown
+    assert rotulo(recomendacao.proxima_acao.tipo_acao) in markdown
     assert recomendacao.proxima_acao.detalhe in markdown
 
 
@@ -170,7 +171,7 @@ def test_o_normal_preserva_chunk_breadcrumb_origem_e_url_das_citacoes_nvidia():
     assert str(citacao.id_chunk) in markdown
     assert escapar_markdown(citacao.breadcrumb) in markdown
     assert citacao.topico in markdown
-    assert citacao.origem in markdown
+    assert rotulo(citacao.origem) in markdown
     assert citacao.tecnologia in markdown
     assert str(citacao.fonte_url) in markdown
 
@@ -192,8 +193,8 @@ def test_o_normal_fecha_com_rubrica_data_de_execucao_e_trajeto():
 
     assert "rubrica-v1" in markdown
     assert "03/09/2026" in markdown
-    assert " → ".join(briefing.rodape.trajeto) in markdown
-    assert briefing.rodape.rota_r3 in markdown
+    assert trajeto_legivel(briefing.rodape.trajeto) in markdown
+    assert rotulo(briefing.rodape.rota_r3) in markdown
 
 
 def test_o_normal_omite_a_secao_de_avisos_quando_nao_ha_aviso():
@@ -207,7 +208,7 @@ def test_o_normal_mostra_os_avisos_quando_existem():
 
     markdown = exportar_briefing_markdown(briefing)
 
-    assert "## Avisos" in markdown
+    assert "## Limites desta análise" in markdown
     assert "Critérios estruturados relaxados." in markdown
 
 
@@ -241,7 +242,7 @@ def test_o_nao_aderente_mantem_fontes_e_auditoria():
     markdown = exportar_briefing_markdown(briefing)
 
     assert str(briefing.fontes[0].url_fonte) in markdown
-    assert "nao_aderente" in markdown
+    assert rotulo(briefing.rodape.rota_r3) in markdown
     assert "rubrica-v1" in markdown
 
 
@@ -280,8 +281,8 @@ def test_o_insuficiente_mantem_a_auditoria_da_execucao():
     markdown = exportar_briefing_markdown(briefing)
 
     assert "rubrica-v1" in markdown
-    assert "evidencia_insuficiente" in markdown
-    assert " → ".join(briefing.rodape.trajeto) in markdown
+    assert rotulo(briefing.rodape.rota_r3) in markdown
+    assert trajeto_legivel(briefing.rodape.trajeto) in markdown
 
 
 def test_o_insuficiente_omite_a_secao_de_fontes_que_o_contrato_deixa_vazia():
@@ -304,6 +305,16 @@ def test_nenhuma_variante_vaza_rotulo_de_curadoria_ou_estado_interno(construtor)
 
     for proibido in (
         "classe_referencia",
+        "query_planner",
+        "retriever",
+        "extractor",
+        "classifier",
+        "evidence_validator",
+        "nvidia_rag",
+        "gap_confirmado",
+        "evidencia_insuficiente",
+        "nao_aderente",
+        "convite_inception",
         "API_KEY",
         "GOOGLE_API_KEY",
         "NVIDIA_API_KEY",
@@ -328,8 +339,24 @@ def tela_do_briefing(briefing):
     return teste.button(key="aprofundar_1").click().run()
 
 
-def fatos_materiais(briefing) -> list[str]:
-    """Tudo que precisa estar nos dois lados para a auditoria fechar."""
+def fatos_do_arquivo(briefing) -> list[str]:
+    """O arquivo mantém a auditoria completa, inclusive os ids de suporte."""
+    citacao = briefing.recomendacoes[0].citacoes_nvidia[0]
+    evidencia = briefing.recomendacoes[0].evidencias_startup[0]
+    return [
+        *fatos_legiveis_na_tela(briefing),
+        f"Afirmação {evidencia.id_afirmacao}",
+        f"documento {evidencia.id_documento}",
+        f"Chunk {citacao.id_chunk}",
+        rotulo(citacao.origem),
+        briefing.rodape.versao_rubrica,
+        rotulo(briefing.rodape.rota_r3),
+        trajeto_legivel(briefing.rodape.trajeto),
+    ]
+
+
+def fatos_legiveis_na_tela(briefing) -> list[str]:
+    """A tela preserva o conteúdo, mas traduz identificadores internos."""
     citacao = briefing.recomendacoes[0].citacoes_nvidia[0]
     evidencia = briefing.recomendacoes[0].evidencias_startup[0]
     fonte = briefing.fontes[0]
@@ -340,65 +367,63 @@ def fatos_materiais(briefing) -> list[str]:
         *[escapar_markdown(p.texto) for p in briefing.pontos_de_conversa],
         briefing.veredito.classe,
         f"{briefing.veredito.fit_score_total}/100",
-        recomendacao.identificador_fundamento,
+        rotular_fundamento(recomendacao),
         recomendacao.tecnologias[0],
-        recomendacao.prioridade,
-        recomendacao.complexidade,
+        rotulo(recomendacao.prioridade),
+        rotulo(recomendacao.complexidade),
         escapar_markdown(recomendacao.justificativa_tecnica),
         escapar_markdown(recomendacao.justificativa_negocio),
-        recomendacao.proxima_acao.tipo_acao,
+        rotulo(recomendacao.proxima_acao.tipo_acao),
         escapar_markdown(recomendacao.proxima_acao.detalhe),
-        f"Afirmação {evidencia.id_afirmacao}",
-        f"documento {evidencia.id_documento}",
         escapar_markdown(evidencia.trecho_citado),
         destino_markdown(str(evidencia.url_fonte)),
-        f"Chunk {citacao.id_chunk}",
         citacao.tecnologia,
-        f"origem: {citacao.origem}",
         escapar_markdown(citacao.topico),
         escapar_markdown(citacao.breadcrumb),
         destino_markdown(str(citacao.fonte_url)),
         escapar_markdown(fonte.titulo),
         fonte.host_normalizado,
-        fonte.tipo,
+        rotulo(fonte.tipo),
         destino_markdown(str(fonte.url_fonte)),
-        briefing.rodape.versao_rubrica,
-        briefing.rodape.rota_r3,
-        " → ".join(briefing.rodape.trajeto),
     ]
 
 
 @pytest.mark.parametrize(
     "fato",
-    fatos_materiais(briefing_normal_falso()),
+    fatos_do_arquivo(briefing_normal_falso()),
 )
 def test_cada_fato_material_aparece_na_tela_e_no_arquivo(fato):
     briefing = briefing_normal_falso()
 
     markdown = exportar_briefing_markdown(briefing)
-    tela = textos(tela_do_briefing(briefing))
-
     assert fato in markdown, f"ausente no arquivo: {fato!r}"
+
+
+@pytest.mark.parametrize(
+    "fato",
+    fatos_legiveis_na_tela(briefing_normal_falso()),
+)
+def test_cada_fato_material_aparece_de_forma_legivel_na_tela(fato):
+    tela = textos(tela_do_briefing(briefing_normal_falso()))
+
     assert fato in tela, f"ausente na tela: {fato!r}"
 
 
-def test_a_tela_mostra_os_ids_que_sustentam_veredito_e_sintese():
+def test_a_tela_nao_expoe_ids_internos_do_veredito_e_da_sintese():
     briefing = briefing_normal_falso()
 
     tela = textos(tela_do_briefing(briefing))
 
-    assert "Afirmações que sustentam a tese: 1" in tela
-    assert "Afirmações de suporte: 1, 2" in tela
+    assert "Afirmações que sustentam a tese" not in tela
+    assert "Afirmações de suporte" not in tela
 
 
-def test_a_tela_mostra_os_ids_de_cada_ponto_de_conversa():
+def test_a_tela_nao_expoe_ids_internos_nos_pontos_de_conversa():
     briefing = briefing_normal_falso()
 
     tela = textos(tela_do_briefing(briefing))
 
-    for ponto in briefing.pontos_de_conversa:
-        marcador = ", ".join(str(i) for i in ponto.ids_afirmacoes_suporte)
-        assert f"afirmações: {marcador}" in tela
+    assert "afirmações:" not in tela.casefold()
 
 
 def test_a_tela_mostra_o_tipo_de_cada_fonte_publica():
@@ -489,8 +514,9 @@ def test_o_titulo_diz_que_nao_houve_conclusao_e_aponta_para_a_causa_validada():
     minusculo = TITULO.casefold()
 
     assert "evidência insuficiente" in minusculo
-    assert "não sustenta uma conclusão" in minusculo
-    assert "avisos" in minusculo
+    assert "não sustentam uma conclusão segura" in minusculo
+    assert "motivo" in minusculo
+    assert "faltou confirmar" in minusculo
 
 
 def test_causas_diferentes_recebem_exatamente_o_mesmo_cabecalho():

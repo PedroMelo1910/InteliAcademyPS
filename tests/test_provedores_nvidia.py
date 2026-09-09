@@ -102,13 +102,39 @@ def test_embedding_usa_modos_distintos_para_passagem_e_consulta():
     assert stub.metodos == ["embed_documents", "embed_query"]
 
 
-def test_construcao_do_cliente_embedding_normaliza_falha_operacional(monkeypatch):
+def test_cliente_embedding_e_tardio_e_normaliza_falha_no_primeiro_uso(monkeypatch):
+    chamadas = 0
+
     def falhar(**_kwargs):
+        nonlocal chamadas
+        chamadas += 1
         raise TimeoutError()
 
     monkeypatch.setattr("radar.provedores.NVIDIAEmbeddings", falhar)
+    provedor = ProvedorEmbeddingNvidia(api_key="segredo-falso")
+    assert chamadas == 0
+
     with pytest.raises(ErroProvedorEmbedding) as erro:
-        ProvedorEmbeddingNvidia(api_key="segredo-falso")
+        provedor.embutir_consulta("consulta")
+    assert chamadas == 1
+    assert erro.value.operacional is True
+
+
+def test_cliente_rerank_e_tardio_e_normaliza_falha_no_primeiro_uso(monkeypatch):
+    chamadas = 0
+
+    def falhar(**_kwargs):
+        nonlocal chamadas
+        chamadas += 1
+        raise TimeoutError()
+
+    monkeypatch.setattr("radar.provedores.NVIDIARerank", falhar)
+    provedor = ProvedorRerankNvidia(api_key="segredo-falso")
+    assert chamadas == 0
+
+    with pytest.raises(ErroProvedorRerank) as erro:
+        provedor.reordenar("consulta", ["texto"])
+    assert chamadas == 1
     assert erro.value.operacional is True
 
 

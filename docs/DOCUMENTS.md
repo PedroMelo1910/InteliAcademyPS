@@ -1,107 +1,93 @@
-git # NVIDIA Startup AI Radar — documentação de trabalho
+# Notas técnicas — NVIDIA AI Radar
 
-Este arquivo reúne a documentação do projeto em um só lugar. Ele é um material de construção e compreensão; o README de entrega será escrito apenas quando o sistema estiver mais completo.
+Este documento complementa o [README principal](../README.md). O README apresenta o produto, o fluxo, a instalação e o uso; aqui ficam as invariantes que ajudam a compreender e defender as decisões de arquitetura.
 
-## 1. Arquitetura e fluxo atual
+## 1. Fronteiras do sistema
 
-O sistema possui uma primeira fatia vertical executável. O `app.py` atual é somente
-uma bancada provisória para acionar e observar o código; a interface final será
-construída depois que os contratos e as saídas do núcleo estiverem estáveis.
+### Estado e contratos
 
-```text
-Consulta de entrada (temporariamente pelo Streamlit)
-        │
-        ▼
-Query Planner — Gemini transforma a frase em PlanoConsulta
-        │
-        ▼
-Retriever — filtros estruturados no SQLite
-        │
-        ▼
-Retriever — FTS5/BM25 ordena os documentos por relevância
-        │
-        ▼
-R1
-  ├─ analisar ───────────────► aprofundamento futuro
-  ├─ candidatas_prontas ─────► ranking interno da aplicação
-  ├─ relaxar ────────────────► volta ao Query Planner
-  └─ sem_resultado ──────────► encerra honestamente
-```
+`radar/contratos.py` define o estado do LangGraph e os objetos trocados entre as etapas. Os modelos Pydantic proíbem campos extras e mantêm identificadores de startup, documento, afirmação e chunk até a saída final.
 
-O ranking atual mede relevância lexical para a pergunta. Ele ainda não é o fit-score NVIDIA.
+Texto integral de documentos não circula desnecessariamente no estado. Agentes recebem somente a projeção permitida pela sua responsabilidade.
 
-Quando não há candidatas, existem no máximo duas tentativas de relaxamento. A primeira remove estágio, localização e porte; a segunda remove setor. Termos de busca, sinais de IA e uma possível classe já produzida pelo sistema são preservados.
+### Dados
 
-## 2. Componentes e contratos
+`radar/base_startups.py` é a fronteira do SQLite. Ela valida os JSONs curados, cria as tabelas, executa SQL parametrizado, mantém os índices FTS5 e persiste o cache de análises.
 
-### Query Planner
+`dados/radar.db` guarda dados de negócio e índices. `dados/checkpoints.db` guarda checkpoints do LangGraph. Ambos são artefatos locais regeneráveis e ficam fora do Git.
 
-Recebe a pergunta do usuário e os vocabulários existentes no banco. O Gemini devolve um `PlanoConsulta` por structured output. O Pydantic rejeita campos extras, listas inválidas e filtros fora do vocabulário. Uma resposta inválida recebe apenas uma nova tentativa; se falhar novamente, a execução termina sem criar um plano falso.
+### Provedores
 
-### Retriever
+`radar/provedores.py` adapta os serviços externos aos contratos do domínio. Gemini é o LLM primário; Groq pode atuar como reserva operacional. Embedding e reranking NVIDIA permanecem em fronteiras próprias e seus clientes são inicializados somente no primeiro uso do RAG, para que uma indisponibilidade técnica não bloqueie a descoberta textual. Testes substituem todos eles por implementações controladas.
 
-Recebe um `PlanoConsulta` validado e funciona em duas camadas. Primeiro, aplica filtros estruturados por SQL parametrizado. Depois, executa `FTS5 MATCH` e ordena os documentos com `bm25()` crescente. Entradas com hífen e outros caracteres da sintaxe FTS5 são transformadas em frases escapadas.
+## 2. Invariantes de evidência
 
-### R1 e estado
+- `classe_referencia` é gabarito de avaliação offline e nunca é entregue aos agentes.
+- O Extractor lê somente documentos recuperados da startup selecionada.
+- Cada afirmação mantém trecho literal e identificador de documento.
+- O Evidence Validator é determinístico e não chama LLM nem rede.
+- Confirmação de proveniência significa que o trecho existe na fonte armazenada; não certifica verdade objetiva externa.
+- Informação desconhecida não é convertida em ausência.
+- Conflitos permanecem desconhecidos e preservam os identificadores envolvidos.
+- Evidência derrubada não classifica, não pontua e não recomenda.
+- Falha operacional não é apresentada como evidência insuficiente.
 
-R1 é uma função pura que lê o estado e devolve exatamente `analisar`, `candidatas_prontas`, `relaxar` ou `sem_resultado`. O state é tipado e guarda somente o necessário para reconstruir o caminho. `trajeto` e `criterios_relaxados` usam reducers para acumular os passos.
+## 3. Invariantes do ranking
 
-### StateGraph e persistência
+O ranking combina informações sem fundir escalas diferentes:
 
-O grafo real já contém a volta condicional do Retriever para o Query Planner. O `SqliteSaver` persiste checkpoints em `dados/checkpoints.db`, separado do banco de negócio `dados/radar.db`. Os dois arquivos são artefatos locais ignorados pelo Git.
+- BM25 indica relação lexical entre a pergunta e os documentos recuperados;
+- fit-score indica aderência NVIDIA sustentada pela análise persistida.
 
-## 3. Base de startups e documentos
+Análises concluídas são ordenadas antes das insuficientes ou ausentes. Em seguida vêm fit-score decrescente, BM25, nome e identificador. Uma análise concluída sem `FitScore` é tratada como cache inválido; o sistema não inventa zero.
 
-A base começa com três empresas reais e três documentos por empresa:
+O grafo de lote reutiliza Extractor, Classifier, Evidence Validator, R2 e R3. Ele não chama Query Planner, NVIDIA RAG, Recommendation ou Briefing.
 
-- Maritaca AI — domínios `maritaca.ai`, `arxiv.org` e `sbtnews.sbt.com.br`;
-- Alice — domínios `alice.com.br`, `latinamericafund.com` e `globalprivatecapital.org`;
-- Caju — domínios `caju.com.br`, `bloomberglinea.com.br` e `onevc.vc`.
+## 4. Invariantes do RAG NVIDIA
 
-Cada arquivo em `dados/base/` representa uma startup. Dentro dele ficam os campos estruturados e seus documentos. Cada documento é uma síntese factual escrita para este projeto, não uma cópia da página nem resultado de scraping.
+- O corpus de startups e o corpus NVIDIA são separados.
+- SQLite é a fonte de verdade dos metadados e textos indexados.
+- FTS5 faz recuperação lexical; sqlite-vec faz recuperação vetorial.
+- RRF combina as listas; ele não substitui o reranking.
+- O reranker atribui scores aos candidatos já recuperados; a ordenação e a guarda de cobertura determinísticas selecionam os seis trechos finais.
+- Cada chunk mantém URL, título, origem e tecnologia ou tópico.
+- Uma recomendação precisa de evidência pública da startup e citação NVIDIA resolvida.
+- Material conceitual pode contextualizar, mas não sustenta sozinho uma tecnologia.
 
-Formato obrigatório de cada documento:
+## 5. Invariantes da recomendação
 
-- `tipo` dentro dos seis valores aceitos pelo TAPI;
-- `titulo`;
-- `conteudo_texto` resumido manualmente;
-- `url_fonte` real e pública;
-- `dominio_fonte`, que precisa corresponder à URL;
-- `data_publicacao`, quando conhecida;
-- `data_acesso` obrigatória.
+O LLM produz apenas um rascunho limitado. O programa valida o fundamento, resolve evidências e citações e calcula prioridade, complexidade e fit-score.
 
-O seed valida no mínimo três documentos e três domínios distintos por startup, URLs únicas e os vocabulários fechados. Depois atualiza as tabelas e reconstrói o FTS5. Rodar novamente com os mesmos JSONs não duplica os registros.
+O fit-score usa quatro pilares e uma soma bruta máxima de 36. Somente afirmações confirmadas pontuam. `gap_confirmado` é diferente de `desconhecido`, e o gate `non-AI` produz zero explicitamente.
 
-`classe_referencia` existe somente para uma avaliação futura. O Retriever e o ranking nunca leem esse campo, pois isso entregaria ao sistema uma resposta que ele deveria produzir sozinho mais adiante.
+Uma recomendação pode partir de:
 
-## 4. Execução, testes e limites atuais
+- uma lacuna confirmada, como dependência de API externa ou dor de escala;
+- uma oportunidade técnica confirmada, como inferência de LLM, visão computacional, voz, dados em escala ou robótica.
 
-Inicializar ou atualizar o banco:
+Nos dois casos, a tecnologia precisa pertencer ao catálogo permitido para aquele fundamento e aparecer no contexto técnico recuperado.
 
-```powershell
-.venv\Scripts\python.exe -m scripts.inicializar_base
-```
+## 6. Saídas possíveis
 
-Executar os testes offline:
+O Briefing é o único payload final do aprofundamento:
 
-```powershell
-.venv\Scripts\python.exe -m pytest -q
-```
+1. **normal:** classificação e evidências válidas, contexto NVIDIA e resultado permitido pelas regras de recomendação;
+2. **non-AI:** classe validada, fit-score zero e nenhuma recomendação NVIDIA;
+3. **evidência insuficiente:** explica o que faltou sem produzir classe, score ou recomendação fictícia.
 
-Iniciar a bancada provisória de validação manual:
+A versão Markdown contém os mesmos fatos e fontes exibidos na interface.
 
-```powershell
-.venv\Scripts\python.exe -m streamlit run app.py
-```
+## 7. Mapa de leitura do código
 
-A chave deve existir somente no `.env` local como `GOOGLE_API_KEY`, sem necessidade de aspas. Se a chave estiver ausente, o núcleo gera um erro de configuração claro e seguro. Se o Gemini falhar, o sistema interrompe a consulta e não fabrica candidatas.
+Para acompanhar uma busca completa:
 
-Os testes atuais cobrem inicialização repetível, filtros estruturados, SQL parametrizado, hífen no FTS5, ordem do BM25, Retriever offline, quatro saídas de R1, dois degraus de relaxamento, structured output inválido, chave ausente, falha do Gemini, checkpoints e integração do resultado real com o ranking.
+1. comece em `radar/aplicacao.py`;
+2. veja a montagem em `radar/grafo.py`;
+3. acompanhe os nós em `radar/agentes/`;
+4. confira as decisões em `radar/agentes/roteadores.py`;
+5. veja os schemas em `radar/contratos.py`;
+6. acompanhe a recuperação NVIDIA em `radar/conhecimento_nvidia/`;
+7. veja score e regras em `radar/recomendacao.py` e `radar/regras_recomendacao.py`;
+8. termine em `app.py` e `radar/interface/` para entender a apresentação.
 
-Limites deliberados deste momento:
-
-- apenas três startups, suficientes para provar a fatia;
-- recuperação lexical, ainda sem busca por significado ou sinônimos;
-- ausência de Extractor, Classifier, Evidence Validator, RAG NVIDIA, recomendação, fit-score e briefing;
-- rota `analisar` alcançável, mas sem produzir uma análise fictícia enquanto os agentes seguintes não existirem.
-- interface atual propositalmente provisória; layout e componentes finais serão feitos somente depois do núcleo funcional completo.
+Os comandos de instalação, preparação da base, testes e execução estão centralizados no [README](../README.md#instalação-do-zero).

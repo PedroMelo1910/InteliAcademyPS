@@ -8,20 +8,21 @@ lê está em `radar.interface.rotulos` e `radar.interface.mensagens`; o que ele
 baixa está em `radar.interface.exportacao` — o mesmo conteúdo da tela.
 
 A direção visual tem uma regra só, e ela é semântica: **verde é aderência
-NVIDIA validada, azul é relevância textual da busca**. As duas medidas nunca
-compartilham cor, rótulo ou vizinhança, porque confundi-las é o erro que este
-projeto não pode cometer na frente de um avaliador. O único HTML bruto da
-aplicação é `CSS_TEMA`, um literal estático: nenhum texto de usuário, de fonte
-pública ou de modelo chega até essa fronteira.
+NVIDIA validada**. A relevância textual continua como critério interno da
+busca, mas não é apresentada como outra pontuação ao usuário. O único HTML
+bruto da aplicação é `CSS_TEMA`, um literal estático: nenhum texto de usuário,
+de fonte pública ou de modelo chega até essa fronteira.
 """
 
 import logging
+from collections import Counter
 
 import streamlit as st
 
 from radar.agentes.query_planner import ErroQueryPlanner
 from radar.aplicacao import criar_aplicacao
-from radar.configuracao import ErroConfiguracao
+from radar.base_startups import BaseStartups
+from radar.configuracao import CAMINHO_BANCO, ErroConfiguracao
 from radar.interface import estado as sessao
 from radar.interface import mensagens
 from radar.interface.exportacao import (
@@ -31,10 +32,12 @@ from radar.interface.exportacao import (
 )
 from radar.interface.rotulos import (
     TOM_DA_CLASSE,
-    contar_estados,
     fracao_do_fit_score,
+    maximo_do_pilar,
     resumir_ranking,
+    rotulo,
     rotular_fundamento,
+    texto_legivel,
     tom_do_status,
 )
 from radar.interface.tema import CSS_TEMA
@@ -48,11 +51,12 @@ st.set_page_config(
     page_title=mensagens.NOME_PRODUTO,
     page_icon="📡",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 st.html(CSS_TEMA)
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def _aplicacao_padrao():
     return criar_aplicacao()
 
@@ -62,10 +66,6 @@ def obter_aplicacao():
     if sessao.CHAVE_APLICACAO in st.session_state:
         return st.session_state[sessao.CHAVE_APLICACAO]
     return _aplicacao_padrao()
-
-
-def ids_de_suporte(valores) -> str:
-    return ", ".join(str(valor) for valor in valores)
 
 
 def linha_meta(*partes: str) -> str:
@@ -86,6 +86,17 @@ def preencher_consulta(pergunta: str) -> None:
     st.session_state["consulta"] = pergunta
 
 
+def renderizar_navegacao() -> str:
+    """Mantém as duas superfícies no mesmo app e no mesmo processo."""
+    st.sidebar.markdown(f"### {mensagens.NOME_PRODUTO}")
+    return st.sidebar.radio(
+        mensagens.ROTULO_NAVEGACAO,
+        (mensagens.PAGINA_RADAR, mensagens.PAGINA_DASHBOARD),
+        label_visibility="collapsed",
+        key="pagina_principal",
+    )
+
+
 # ----------------------------------------------------------------------
 # Abertura e busca
 # ----------------------------------------------------------------------
@@ -93,11 +104,7 @@ def preencher_consulta(pergunta: str) -> None:
 
 def renderizar_topo() -> None:
     with st.container(key="topo_radar"):
-        with st.container(key="etiqueta_produto"):
-            st.markdown(mensagens.ETIQUETA_PRODUTO)
         st.title(mensagens.NOME_PRODUTO)
-        with st.container(key="proposito_produto"):
-            st.markdown(mensagens.PROPOSITO)
 
 
 def renderizar_busca() -> tuple[str, bool]:
@@ -109,7 +116,6 @@ def renderizar_busca() -> tuple[str, bool]:
                 placeholder=mensagens.PLACEHOLDER_CONSULTA,
             )
             buscar = st.form_submit_button(mensagens.ROTULO_BUSCAR, type="primary")
-        st.caption(mensagens.CONVITE_INICIAL)
     return consulta, buscar
 
 
@@ -125,7 +131,6 @@ def renderizar_exemplos() -> None:
                 on_click=preencher_consulta,
                 args=(pergunta,),
             )
-    st.caption(mensagens.LEGENDA_EXEMPLOS)
 
 
 def executar_busca(consulta: str) -> None:
@@ -147,6 +152,93 @@ def executar_busca(consulta: str) -> None:
 
 
 # ----------------------------------------------------------------------
+# Dashboard da base persistida
+# ----------------------------------------------------------------------
+
+
+def dados_do_dashboard():
+    """Lê somente projeções permitidas; nunca consulta o gabarito da curadoria."""
+    base = BaseStartups(CAMINHO_BANCO)
+    empresas = base.listar_startups_para_lote()
+    analises = base.carregar_analises(
+        [empresa.id_startup for empresa in empresas]
+    )
+    return empresas, analises
+
+
+def renderizar_distribuicao(titulo: str, valores, total: int) -> None:
+    st.markdown(f"### {titulo}")
+    for nome, quantidade in valores:
+        colunas = st.columns([3, 6, 1], vertical_alignment="center")
+        colunas[0].markdown(f"**{escapar_markdown(nome)}**")
+        colunas[1].progress(quantidade / total if total else 0)
+        colunas[2].markdown(str(quantidade))
+
+
+def renderizar_dashboard() -> None:
+    st.title(mensagens.TITULO_DASHBOARD)
+    st.caption(mensagens.LEGENDA_DASHBOARD)
+    try:
+        empresas, analises = dados_do_dashboard()
+    except Exception:
+        logger.exception("Falha ao carregar o panorama local")
+        st.error("Não foi possível carregar o panorama da base local.")
+        return
+
+    concluidas = [item for item in analises.values() if item.status == "concluida"]
+    insuficientes = len(analises) - len(concluidas)
+    ausentes = len(empresas) - len(analises)
+    pontuacoes = [item.fit_score.total for item in concluidas if item.fit_score]
+
+    with st.container(key="metricas_dashboard"):
+        colunas = st.columns(4)
+        colunas[0].metric("Startups", len(empresas))
+        colunas[1].metric("Análises concluídas", len(concluidas))
+        colunas[2].metric(
+            "Fit-score médio",
+            f"{sum(pontuacoes) / len(pontuacoes):.1f}/100" if pontuacoes else "—",
+        )
+        colunas[3].metric("Maior fit-score", f"{max(pontuacoes)}/100" if pontuacoes else "—")
+
+    esquerda, direita = st.columns(2)
+    classes = Counter(item.classe for item in concluidas if item.classe is not None)
+    faixas = (
+        ("Zero validado", sum(valor == 0 for valor in pontuacoes)),
+        ("De 1 a 25", sum(1 <= valor <= 25 for valor in pontuacoes)),
+        ("De 26 a 50", sum(26 <= valor <= 50 for valor in pontuacoes)),
+        ("Acima de 50", sum(valor > 50 for valor in pontuacoes)),
+    )
+    with esquerda:
+        renderizar_distribuicao(
+            "Classificação do uso de IA",
+            ((classe, classes.get(classe, 0)) for classe in (
+                "AI-native", "AI-enabled", "non-AI"
+            )),
+            len(concluidas),
+        )
+    with direita:
+        renderizar_distribuicao(
+            "Distribuição do fit-score", faixas, len(pontuacoes)
+        )
+
+    setores = Counter(empresa.setor for empresa in empresas)
+    renderizar_distribuicao(
+        "Setores mais representados",
+        setores.most_common(6),
+        len(empresas),
+    )
+    if insuficientes or ausentes:
+        st.info(
+            f"{insuficientes} análise(s) sem evidência suficiente e "
+            f"{ausentes} ainda não analisada(s)."
+        )
+    st.caption(
+        "O fit-score mede aderência comprovada à stack NVIDIA. Ele não avalia "
+        "a qualidade das empresas e não é aumentado para melhorar o gráfico."
+    )
+
+
+# ----------------------------------------------------------------------
 # Tela do ranking
 # ----------------------------------------------------------------------
 
@@ -155,7 +247,9 @@ def renderizar_ranking(descoberta) -> None:
     if descoberta.criterios_relaxados:
         st.info(
             "A busca não encontrou candidatas com os critérios originais e "
-            "relaxou: " + ", ".join(descoberta.criterios_relaxados) + "."
+            "ampliou: "
+            + ", ".join(texto_legivel(item) for item in descoberta.criterios_relaxados)
+            + "."
         )
     ranking = sessao.ranking_visivel(st.session_state)
     if not ranking:
@@ -163,30 +257,10 @@ def renderizar_ranking(descoberta) -> None:
         st.caption(mensagens.SEM_RESULTADO_SAIDA)
         return
 
-    renderizar_painel(ranking)
     st.subheader(mensagens.TITULO_RANKING)
     st.caption(mensagens.LEGENDA_RANKING)
     for resumo, item in zip(resumir_ranking(ranking), ranking, strict=True):
         renderizar_candidata(resumo, item)
-    with st.expander(mensagens.TITULO_INTERPRETACAO):
-        st.json(descoberta.plano.model_dump(mode="json"))
-        st.caption("Fluxo executado: " + " → ".join(descoberta.trajeto))
-
-
-def renderizar_painel(ranking) -> None:
-    """As contagens por estado, e a explicação das duas medidas ao lado."""
-    contagem = contar_estados(ranking)
-    with st.container(key="painel_ranking"):
-        colunas = st.columns(4)
-        colunas[0].metric(mensagens.ROTULO_TOTAL_CANDIDATAS, contagem.total)
-        colunas[1].metric(mensagens.ROTULO_TOTAL_ANALISADAS, contagem.concluidas)
-        colunas[2].metric(mensagens.ROTULO_TOTAL_SEM_LASTRO, contagem.sem_lastro)
-        colunas[3].metric(mensagens.ROTULO_TOTAL_PENDENTES, contagem.ausentes)
-    with st.expander(mensagens.TITULO_COMO_LER):
-        st.markdown(
-            f"**{mensagens.ROTULO_FIT_SCORE}** — {mensagens.EXPLICACAO_FIT_SCORE}"
-        )
-        st.markdown(f"**{mensagens.ROTULO_BM25}** — {mensagens.EXPLICACAO_BM25}")
 
 
 def renderizar_candidata(resumo, item) -> None:
@@ -195,7 +269,7 @@ def renderizar_candidata(resumo, item) -> None:
         colunas = st.columns([1, 8, 3], vertical_alignment="center")
 
         with colunas[0], st.container(key=f"posicao_{resumo.id_startup}"):
-            st.markdown(f"{resumo.posicao:02d}")
+            st.markdown(str(resumo.posicao))
 
         with colunas[1]:
             with st.container(key=f"nome_{resumo.id_startup}"):
@@ -210,37 +284,18 @@ def renderizar_candidata(resumo, item) -> None:
                 )
 
         with colunas[2]:
-            if resumo.fit_score is not None:
+            if resumo.fit_score is not None and item.fit_score_total is not None:
                 st.metric(mensagens.ROTULO_FIT_SCORE, resumo.fit_score)
+                st.progress(fracao_do_fit_score(item.fit_score_total))
             else:
                 st.caption(mensagens.SEM_PONTUACAO_GRAVADA)
 
         st.markdown(escapar_markdown(resumo.descricao))
-        st.caption(resumo.explicacao_status)
-        if resumo.justificativa_fit_score:
-            st.markdown(
-                f"**{mensagens.TITULO_JUSTIFICATIVA}:** "
-                + escapar_markdown(resumo.justificativa_fit_score)
-            )
         if resumo.motivo_evidencia_insuficiente:
             st.markdown(
                 f"**{mensagens.TITULO_MOTIVO}:** "
                 + escapar_markdown(resumo.motivo_evidencia_insuficiente)
             )
-
-        with st.container(key=f"lexical_{resumo.id_startup}"):
-            st.markdown(f"{mensagens.ROTULO_BM25}: {resumo.bm25}")
-
-        with st.expander(f"{mensagens.TITULO_DOCUMENTOS} — {nome}"):
-            st.caption(mensagens.EXPLICACAO_BM25)
-            for documento in item.documentos:
-                st.markdown(
-                    f"- [{escapar_markdown(documento.titulo)}]"
-                    f"({destino_markdown(documento.url_fonte)}) — "
-                    f"{escapar_markdown(documento.dominio_fonte)}; acesso em "
-                    f"{documento.data_acesso.strftime('%d/%m/%Y')}; "
-                    f"BM25 {documento.score_bm25:.6f}"
-                )
 
         st.button(
             mensagens.ROTULO_ANALISAR.format(nome),
@@ -281,10 +336,7 @@ def renderizar_analise(descoberta) -> None:
 
     pendente = sessao.aprofundamento_pendente(st.session_state)
     if pendente is not None:
-        with st.spinner(
-            f"{escapar_markdown(item.empresa.nome)}: "
-            + mensagens.MENSAGEM_CARREGANDO_ANALISE
-        ):
+        with st.spinner(mensagens.MENSAGEM_CARREGANDO_ANALISE):
             executar_aprofundamento(descoberta, pendente)
 
     falha = sessao.falha_selecionada(st.session_state)
@@ -292,12 +344,20 @@ def renderizar_analise(descoberta) -> None:
         st.subheader(mensagens.TITULO_SEM_ANALISE_PROFUNDA)
         st.error(falha)
         with st.expander(mensagens.TITULO_DIAGNOSTICO):
+            st.caption(mensagens.ORIENTACAO_FALHA)
             st.caption(mensagens.DIAGNOSTICO_TECNICO)
+        st.button(
+            mensagens.ROTULO_TENTAR_NOVAMENTE,
+            key=f"tentar_novamente_{id_startup}",
+            type="primary",
+            on_click=selecionar,
+            args=(id_startup,),
+        )
         return
 
     saida = sessao.aprofundamento_selecionado(st.session_state)
     if saida is not None:
-        renderizar_briefing(saida)
+        renderizar_briefing(saida, item, descoberta)
 
 
 def executar_aprofundamento(descoberta, id_startup: int) -> None:
@@ -322,43 +382,48 @@ def executar_aprofundamento(descoberta, id_startup: int) -> None:
 # ----------------------------------------------------------------------
 
 
-def renderizar_briefing(saida) -> None:
+def renderizar_briefing(saida, item=None, descoberta=None) -> None:
     briefing = saida.briefing
     renderizar_cabecalho(briefing)
+    renderizar_origem_da_analise(item, briefing)
 
     abas = [mensagens.ABA_VISAO_GERAL]
     if briefing.fontes or briefing.recomendacoes:
         abas.append(mensagens.ABA_EVIDENCIAS)
     if briefing.recomendacoes:
         abas.append(mensagens.ABA_RECOMENDACOES)
-    abas.append(mensagens.ABA_RASTRO)
 
     paineis = dict(zip(abas, st.tabs(abas), strict=True))
 
     with paineis[mensagens.ABA_VISAO_GERAL]:
-        renderizar_visao_geral(briefing)
+        renderizar_visao_geral(briefing, saida, item, descoberta)
     if mensagens.ABA_EVIDENCIAS in paineis:
         with paineis[mensagens.ABA_EVIDENCIAS]:
             renderizar_evidencias(briefing)
     if mensagens.ABA_RECOMENDACOES in paineis:
         with paineis[mensagens.ABA_RECOMENDACOES]:
             renderizar_recomendacoes(briefing.recomendacoes)
-    with paineis[mensagens.ABA_RASTRO]:
-        renderizar_auditoria(briefing, saida)
+
+
+def renderizar_origem_da_analise(item, briefing) -> None:
+    if item is None or item.status_analise != "concluida":
+        return
+    st.info(mensagens.AVISO_CACHE_ATUAL)
+    cache_diverge = (
+        item.classe != briefing.veredito.classe
+        or item.fit_score_total != briefing.veredito.fit_score_total
+    )
+    if cache_diverge:
+        st.warning(mensagens.AVISO_CACHE_DIVERGENTE)
 
 
 def renderizar_cabecalho(briefing) -> None:
-    """Identificação, veredito e download — a resposta executiva antes das abas."""
+    """Identificação e download — o resultado vem depois do lastro na visão geral."""
     cabecalho = briefing.cabecalho
-    veredito = briefing.veredito
     with st.container(key="cabecalho_analise"):
         with st.container(key="etiqueta_briefing"):
             st.markdown(mensagens.ETIQUETA_BRIEFING)
         st.header(escapar_markdown(cabecalho.nome))
-
-        with st.container(horizontal=True, key="selos_analise"):
-            if veredito.classe is not None:
-                st.badge(veredito.classe, color=TOM_DA_CLASSE)
 
         with st.container(key="meta_analise"):
             st.markdown(
@@ -374,27 +439,6 @@ def renderizar_cabecalho(briefing) -> None:
             f"({destino_markdown(cabecalho.site)})"
         )
 
-        if veredito.fit_score_total is not None:
-            colunas = st.columns([1, 3], vertical_alignment="center")
-            colunas[0].metric(
-                mensagens.ROTULO_FIT_SCORE, f"{veredito.fit_score_total}/100"
-            )
-            colunas[1].progress(fracao_do_fit_score(veredito.fit_score_total))
-            colunas[1].caption(mensagens.EXPLICACAO_FIT_SCORE)
-
-        if briefing.variante == "evidencia_insuficiente":
-            st.warning(RESUMO_DA_VARIANTE[briefing.variante])
-        else:
-            st.caption(RESUMO_DA_VARIANTE[briefing.variante])
-            st.markdown(f"**{mensagens.TITULO_TESE}**")
-            with st.container(key="tese_principal"):
-                st.markdown(escapar_markdown(veredito.tese))
-            if veredito.ids_afirmacoes_suporte:
-                st.caption(
-                    "Afirmações que sustentam a tese: "
-                    + ids_de_suporte(veredito.ids_afirmacoes_suporte)
-                )
-
         st.download_button(
             mensagens.ROTULO_BAIXAR,
             data=exportar_briefing_markdown(briefing).encode("utf-8"),
@@ -406,25 +450,139 @@ def renderizar_cabecalho(briefing) -> None:
         st.caption(mensagens.LEGENDA_BAIXAR)
 
 
-def renderizar_visao_geral(briefing) -> None:
+def renderizar_visao_geral(briefing, saida=None, item=None, descoberta=None) -> None:
+    if descoberta is not None and item is not None:
+        st.markdown(f"### {mensagens.TITULO_POR_QUE_APARECEU}")
+        st.markdown(
+            "Esta startup apareceu entre as candidatas para **"
+            + escapar_markdown(descoberta.consulta)
+            + "**. A busca encontrou correspondência em "
+            + f"{len(item.documentos)} documento(s) público(s)."
+        )
+
+    perfil = getattr(saida, "perfil_validado", None) if saida is not None else None
+    renderizar_evidencias_confirmadas(perfil)
+    renderizar_incertezas(perfil)
+    renderizar_resultado_analise(briefing)
+    if saida is not None:
+        renderizar_fit_score(saida)
+    renderizar_necessidades(perfil)
+
     st.markdown(f"### {mensagens.TITULO_SINTESE}")
     st.markdown(escapar_markdown(briefing.sintese_executiva.texto))
-    if briefing.sintese_executiva.ids_afirmacoes_suporte:
-        st.caption(
-            "Afirmações de suporte: "
-            + ids_de_suporte(briefing.sintese_executiva.ids_afirmacoes_suporte)
-        )
+
+    if not briefing.recomendacoes:
+        if briefing.variante == "evidencia_insuficiente":
+            st.info(mensagens.EXPLICACAO_SEM_RECOMENDACAO)
+
     if briefing.pontos_de_conversa:
         st.markdown(f"### {mensagens.TITULO_PONTOS}")
         for ponto in briefing.pontos_de_conversa:
-            st.markdown(
-                f"- {escapar_markdown(ponto.texto)} "
-                f"*(afirmações: {ids_de_suporte(ponto.ids_afirmacoes_suporte)})*"
-            )
+            st.markdown(f"- {escapar_markdown(ponto.texto)}")
     if briefing.avisos:
         st.markdown(f"### {mensagens.TITULO_AVISOS}")
         for aviso in briefing.avisos:
-            st.warning(escapar_markdown(aviso))
+            st.warning(escapar_markdown(texto_legivel(aviso)))
+
+
+def renderizar_evidencias_confirmadas(perfil) -> None:
+    if perfil is None:
+        return
+    confirmadas = [
+        item for item in perfil.afirmacoes_validadas if item.situacao == "confirmada"
+    ]
+    if confirmadas:
+        st.markdown(f"### {mensagens.TITULO_EVIDENCIAS_CONFIRMADAS}")
+        for item in confirmadas:
+            with st.container(key=f"evidencia_confirmada_{item.id_afirmacao}"):
+                st.markdown(escapar_markdown(item.texto))
+                st.caption(rotulo(item.categoria))
+
+
+
+def renderizar_incertezas(perfil) -> None:
+    if perfil is None:
+        return
+    desconhecidos = [
+        item for item in perfil.estado_dimensoes_gap if item.estado == "desconhecido"
+    ]
+    derrubadas = [
+        item for item in perfil.afirmacoes_validadas if item.situacao == "derrubada"
+    ]
+    if desconhecidos:
+        with st.expander(mensagens.TITULO_INFORMACOES_ABERTAS):
+            for item in desconhecidos:
+                st.markdown(f"- {rotulo(item.dimensao)}")
+
+    if derrubadas:
+        with st.expander(mensagens.TITULO_EVIDENCIAS_DESCARTADAS):
+            for item in derrubadas:
+                st.markdown(escapar_markdown(item.texto))
+                st.caption(
+                    f"{rotulo(item.categoria)} · "
+                    + escapar_markdown(
+                        texto_legivel(item.motivo or "Referência não confirmada.")
+                    )
+                )
+
+
+def renderizar_resultado_analise(briefing) -> None:
+    veredito = briefing.veredito
+    st.markdown(f"### {mensagens.TITULO_RESULTADO_ATUAL}")
+    if veredito.classe is not None:
+        st.badge(veredito.classe, color=TOM_DA_CLASSE)
+    if veredito.fit_score_total is not None:
+        colunas = st.columns([1, 3], vertical_alignment="center")
+        colunas[0].metric(
+            mensagens.ROTULO_FIT_SCORE, f"{veredito.fit_score_total}/100"
+        )
+        colunas[1].progress(fracao_do_fit_score(veredito.fit_score_total))
+        colunas[1].caption(mensagens.EXPLICACAO_FIT_SCORE)
+
+    if briefing.variante == "evidencia_insuficiente":
+        st.warning(RESUMO_DA_VARIANTE[briefing.variante])
+        return
+    if briefing.variante == "nao_aderente":
+        st.info(mensagens.EXPLICACAO_NON_AI)
+    else:
+        st.caption(RESUMO_DA_VARIANTE[briefing.variante])
+    st.markdown(f"**{mensagens.TITULO_TESE}**")
+    with st.container(key="tese_principal"):
+        st.markdown(escapar_markdown(veredito.tese))
+
+
+def renderizar_necessidades(perfil) -> None:
+    if perfil is None:
+        return
+    gaps = [
+        item for item in perfil.estado_dimensoes_gap if item.estado == "gap_confirmado"
+    ]
+    if gaps:
+        st.markdown(f"### {mensagens.TITULO_NECESSIDADES}")
+        for item in gaps:
+            with st.container(key=f"necessidade_{item.dimensao}"):
+                st.markdown(f"**{rotulo(item.dimensao)}**")
+                st.caption(
+                    "A ausência foi declarada em uma fonte e passou pela conferência."
+                )
+
+
+def renderizar_fit_score(saida) -> None:
+    fit_score = getattr(saida, "fit_score", None)
+    if fit_score is None:
+        return
+    st.markdown(f"### {mensagens.TITULO_SCORE}")
+    st.caption(mensagens.EXPLICACAO_FIT_SCORE)
+    colunas = st.columns(4)
+    for coluna, pilar in zip(colunas, fit_score.pilares, strict=True):
+        with coluna, st.container(key=f"pilar_{pilar.pilar}"):
+            st.metric(
+                rotulo(pilar.pilar),
+                f"{pilar.pontos}/{maximo_do_pilar(pilar.pilar)}",
+            )
+            st.caption(f"Faixa {rotulo(pilar.faixa).lower()}")
+            for trava in pilar.travas_aplicadas:
+                st.caption(rotulo(trava))
 
 
 def renderizar_evidencias(briefing) -> None:
@@ -433,11 +591,9 @@ def renderizar_evidencias(briefing) -> None:
         st.markdown(f"### {mensagens.TITULO_EVIDENCIA_STARTUP}")
         st.caption(mensagens.LEGENDA_EVIDENCIA_STARTUP)
         for evidencia in evidencias_da_startup(briefing):
+            st.caption(f'“{escapar_markdown(evidencia.trecho_citado)}”')
             st.markdown(
-                f"- Afirmação {evidencia.id_afirmacao} "
-                f"(documento {evidencia.id_documento}): "
-                f'"{escapar_markdown(evidencia.trecho_citado)}" — '
-                f"[fonte da afirmação {evidencia.id_afirmacao}]"
+                f"[Abrir fonte pública]"
                 f"({destino_markdown(evidencia.url_fonte)})"
             )
 
@@ -452,7 +608,7 @@ def renderizar_evidencias(briefing) -> None:
             linha = (
                 f"- [{escapar_markdown(fonte.titulo)}]"
                 f"({destino_markdown(fonte.url_fonte)}) — "
-                f"{escapar_markdown(fonte.host_normalizado)} — {fonte.tipo}"
+                f"{escapar_markdown(fonte.host_normalizado)} — {rotulo(fonte.tipo)}"
             )
             if fonte.data_publicacao is not None:
                 linha += (
@@ -483,99 +639,71 @@ def citacoes_nvidia(briefing):
 
 
 def linha_de_citacao(citacao) -> str:
-    partes = [f"- Chunk {citacao.id_chunk}"]
-    if citacao.tecnologia is not None:
-        partes.append(citacao.tecnologia)
-    partes.append(f"origem: {citacao.origem}")
-    partes.append(f"tópico: {escapar_markdown(citacao.topico)}")
-    partes.append(f"trilha: {escapar_markdown(citacao.breadcrumb)}")
+    partes = []
+    for valor in (citacao.tecnologia, citacao.topico, citacao.breadcrumb):
+        if valor is None:
+            continue
+        legivel = escapar_markdown(valor)
+        if legivel.casefold() not in {item.casefold() for item in partes}:
+            partes.append(legivel)
     partes.append(
-        f"[chunk NVIDIA {citacao.id_chunk}]({destino_markdown(citacao.fonte_url)})"
+        f"[Abrir referência NVIDIA]({destino_markdown(citacao.fonte_url)})"
     )
     return " — ".join(partes)
 
 
 def renderizar_recomendacoes(recomendacoes) -> None:
-    st.caption(mensagens.LEGENDA_RECOMENDACAO)
     for ordem, recomendacao in enumerate(recomendacoes, start=1):
         with st.container(border=True, key=f"bloco_recomendacao_{ordem}"):
-            st.markdown(f"#### {ordem}. {rotular_fundamento(recomendacao)}")
-            st.markdown(
-                f"**{mensagens.ROTULO_TECNOLOGIAS}:** "
-                + ", ".join(recomendacao.tecnologias)
+            st.caption(f"RECOMENDAÇÃO {ordem}")
+            st.markdown(f"### {' + '.join(recomendacao.tecnologias)}")
+            st.caption(rotular_fundamento(recomendacao))
+            st.caption(
+                f"Prioridade: {rotulo(recomendacao.prioridade)} · "
+                f"Complexidade: {rotulo(recomendacao.complexidade)}"
             )
-            colunas = st.columns(2)
-            colunas[0].metric(
-                mensagens.ROTULO_PRIORIDADE, recomendacao.prioridade
-            )
-            colunas[1].metric(
-                mensagens.ROTULO_COMPLEXIDADE, recomendacao.complexidade
-            )
-            st.markdown(
-                f"**{mensagens.ROTULO_JUSTIFICATIVA_NEGOCIO}:** "
-                + escapar_markdown(recomendacao.justificativa_negocio)
-            )
-            st.markdown(
-                f"**{mensagens.ROTULO_JUSTIFICATIVA_TECNICA}:** "
-                + escapar_markdown(recomendacao.justificativa_tecnica)
-            )
-            st.markdown(
-                f"**Próxima ação ({recomendacao.proxima_acao.tipo_acao}):** "
+            st.markdown(escapar_markdown(recomendacao.justificativa_negocio))
+            st.info(
+                f"**Próximo passo — "
+                f"{rotulo(recomendacao.proxima_acao.tipo_acao)}:** "
                 + escapar_markdown(recomendacao.proxima_acao.detalhe)
             )
-            st.caption(
-                f"{mensagens.TITULO_LASTRO}: afirmações "
-                + ids_de_suporte(
-                    item.id_afirmacao for item in recomendacao.evidencias_startup
-                )
-                + " · chunks NVIDIA "
-                + ids_de_suporte(
-                    item.id_chunk for item in recomendacao.citacoes_nvidia
-                )
-            )
-
-
-def renderizar_auditoria(briefing, saida) -> None:
-    rodape = briefing.rodape
-    st.markdown(f"### {mensagens.TITULO_AUDITORIA}")
-    st.markdown(f"- **Versão da rubrica:** {rodape.versao_rubrica}")
-    st.markdown(
-        f"- **Data de execução:** {rodape.data_execucao.strftime('%d/%m/%Y')}"
-    )
-    st.markdown(
-        f"- **Afirmações confirmadas:** {rodape.afirmacoes_confirmadas} · "
-        f"**derrubadas:** {rodape.afirmacoes_derrubadas}"
-    )
-    st.markdown(f"- **Rota terminal (R3):** {rodape.rota_r3}")
-    st.markdown("- **Trajeto do briefing:** " + " → ".join(rodape.trajeto))
-    st.markdown("- **Trajeto desta execução:** " + " → ".join(saida.trajeto))
-    for erro in saida.erros:
-        st.markdown(
-            "- **Ocorrência registrada pelo grafo:** " + escapar_markdown(erro)
-        )
-    st.caption(
-        f"Gerado em {briefing.cabecalho.data_geracao.strftime('%d/%m/%Y')} para a "
-        "consulta: " + escapar_markdown(briefing.cabecalho.consulta_original)
-    )
+            with st.expander("Entenda a solução técnica"):
+                st.markdown(escapar_markdown(recomendacao.justificativa_tecnica))
+            with st.expander(mensagens.TITULO_LASTRO):
+                st.markdown("**Fonte pública da startup**")
+                for evidencia in recomendacao.evidencias_startup:
+                    st.caption(f'“{escapar_markdown(evidencia.trecho_citado)}”')
+                    st.markdown(
+                        f"[Abrir fonte pública]"
+                        f"({destino_markdown(evidencia.url_fonte)})"
+                    )
+                st.markdown("**Fonte técnica NVIDIA**")
+                for citacao in recomendacao.citacoes_nvidia:
+                    st.markdown(linha_de_citacao(citacao))
 
 
 # ----------------------------------------------------------------------
 # Página
 # ----------------------------------------------------------------------
 
-renderizar_topo()
-consulta_digitada, submeteu = renderizar_busca()
-
-if submeteu:
-    if consulta_digitada.strip():
-        executar_busca(consulta_digitada)
-    else:
-        st.warning(mensagens.CONSULTA_EM_BRANCO)
-
-descoberta_corrente = sessao.descoberta_atual(st.session_state)
-if descoberta_corrente is None:
-    renderizar_exemplos()
-elif sessao.startup_selecionada(st.session_state) is None:
-    renderizar_ranking(descoberta_corrente)
+pagina = renderizar_navegacao()
+if pagina == mensagens.PAGINA_DASHBOARD:
+    renderizar_dashboard()
 else:
-    renderizar_analise(descoberta_corrente)
+    renderizar_topo()
+    consulta_digitada, submeteu = renderizar_busca()
+
+    if submeteu:
+        if consulta_digitada.strip():
+            executar_busca(consulta_digitada)
+        else:
+            st.warning(mensagens.CONSULTA_EM_BRANCO)
+
+    descoberta_corrente = sessao.descoberta_atual(st.session_state)
+    if descoberta_corrente is None:
+        renderizar_exemplos()
+    elif sessao.startup_selecionada(st.session_state) is None:
+        renderizar_ranking(descoberta_corrente)
+    else:
+        renderizar_analise(descoberta_corrente)
