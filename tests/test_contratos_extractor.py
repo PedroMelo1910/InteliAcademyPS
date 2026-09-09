@@ -1,3 +1,5 @@
+"""Testa os contratos fechados de entrada e saída do Extractor."""
+
 import pytest
 from pydantic import ValidationError
 

@@ -1,0 +1,40 @@
+{
+  "nome": "BotCity",
+  "site": "https://botcity.dev/",
+  "setor": "Automação empresarial e governança de IA",
+  "estagio": "série A",
+  "localizacao": "Campinas, SP",
+  "descricao_curta": "Plataforma brasileira para orquestração, observabilidade, segurança e governança de automações, scripts Python e agentes de IA.",
+  "ano_fundacao": null,
+  "tamanho_time": "não divulgado",
+  "classe_referencia": "AI-enabled",
+  "documentos": [
+    {
+      "tipo": "site institucional",
+      "titulo": "Sobre a BotCity",
+      "conteudo_texto": "A página institucional informa que a BotCity foi fundada no Brasil e desenvolveu uma plataforma para governança centralizada e orquestração de automações empresariais em grande escala. O conteúdo descreve a origem em automação RPA e a evolução para governança de scripts Python e agentes de IA, com visibilidade, segurança, conformidade e monitoramento do ciclo de vida das automações.",
+      "url_fonte": "https://botcity.dev/br/about-us",
+      "dominio_fonte": "botcity.dev",
+      "data_publicacao": null,
+      "data_acesso": "2026-09-09"
+    },
+    {
+      "tipo": "perfil de founder",
+      "titulo": "BotCity: Observability and Governance for AI-Generated Python scripts",
+      "conteudo_texto": "O perfil da Y Combinator registra a BotCity como empresa ativa em Campinas e participante da turma Winter 2022. A página descreve uma plataforma centralizada para governar scripts Python produzidos por pessoas ou por IA, reunindo orquestração, observabilidade e segurança; também associa a origem técnica do produto à automação apoiada por visão computacional.",
+      "url_fonte": "https://www.ycombinator.com/companies/botcity",
+      "dominio_fonte": "ycombinator.com",
+      "data_publicacao": null,
+      "data_acesso": "2026-09-09"
+    },
+    {
+      "tipo": "notícia",
+      "titulo": "'Babá de robôs', startup brasileira capta R$ 65 milhões de investidores globais",
+      "conteudo_texto": "A reportagem informa que a BotCity anunciou em setembro de 2025 uma rodada Série A de R$ 65 milhões, liderada pela Four Rivers e acompanhada por Y Combinator, Astella e Upload. O texto descreve uma plataforma usada para monitorar e auditar automações e agentes de IA, além do lançamento do BotCity Sentinel para localizar e centralizar scripts executados fora da governança das equipes de tecnologia.",
+      "url_fonte": "https://exame.com/negocios/baba-de-robos-startup-brasileira-capta-r-65-milhoes-de-investidores-globais/",
+      "dominio_fonte": "exame.com",
+      "data_publicacao": "2025-09-25",
+      "data_acesso": "2026-09-09"
+    }
+  ]
+}

@@ -39,7 +39,11 @@ from radar.contratos import (
     VarianteBriefing,
     VereditoBriefing,
 )
-from radar.provedores import ProvedorBriefingRascunho
+from radar.provedores import (
+    MOTIVO_RECUSA_ESTRUTURADA,
+    ErroReservaIncompativel,
+    ProvedorBriefingRascunho,
+)
 
 
 # Uma única correção estruturada, como nos demais nós de LLM do repositório.
@@ -308,7 +312,10 @@ class AgenteBriefing:
             ),
         )
         for recomendacao in recomendacoes:
-            rotulo = f"a recomendação do gap {recomendacao.gap_enderecado}"
+            rotulo = (
+                f"a recomendação do fundamento {recomendacao.tipo_fundamento}"
+                f"/{recomendacao.identificador_fundamento}"
+            )
             for evidencia in recomendacao.evidencias_startup:
                 _conferir_evidencia(evidencia, rotulo, validadas, fontes, empresa)
             for citacao in recomendacao.citacoes_nvidia:
@@ -367,9 +374,20 @@ class AgenteBriefing:
                 if ultima:
                     raise ErroBriefing(_falha_dupla(erro_anterior)) from exc
                 continue
+            except ErroReservaIncompativel as exc:
+                # A reserva recusou o **pedido** estruturado (HTTP 400), não caiu.
+                # Isso é falha de contrato na fronteira de provedores, e falha de
+                # contrato é exatamente o que a tentativa corretiva deste nó existe
+                # para absorver — consome a mesma, nunca uma terceira. O prompt não
+                # ganha aviso de correção: o modelo não respondeu nada errado.
+                if ultima:
+                    raise ErroBriefing(
+                        _falha_dupla(erro_anterior or MOTIVO_RECUSA_ESTRUTURADA)
+                    ) from exc
+                continue
             except Exception as exc:
                 raise ErroBriefing(
-                    "O Gemini não respondeu ao Briefing; nenhum briefing "
+                    "O provedor de IA não respondeu ao Briefing; nenhum briefing "
                     "parcial foi gravado no estado."
                 ) from exc
 
@@ -872,8 +890,8 @@ def _fit_score(estado: dict[str, Any]) -> FitScore:
 
 def _falha_dupla(erro: str) -> str:
     return (
-        "O Gemini respondeu duas vezes fora do contrato estruturado; nenhum "
-        f"briefing foi gravado no estado. Última falha: {erro}"
+        "O provedor de IA respondeu duas vezes fora do contrato estruturado; "
+        f"nenhum briefing foi gravado no estado. Última falha: {erro}"
     )
 
 

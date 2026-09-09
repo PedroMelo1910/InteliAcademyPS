@@ -13,7 +13,9 @@ import pytest
 from radar.agentes.recommendation import (
     ErroRecommendation,
     Recommendation,
+    _pontos_centralidade,
 )
+from radar.regras_recomendacao import calcular_complexidade, calcular_prioridade
 from radar.contratos import (
     Classificacao,
     ContextoNvidia,
@@ -22,9 +24,13 @@ from radar.contratos import (
     MetadadoDocumentoFitScore,
     Recomendacao,
 )
+from radar.provedores import falha_operacional
 from tests.conftest import (
+    CORPO_BRUTO_DO_PROVEDOR,
     ProvedorSequencialFalso,
     afirmacao_validada_falsa,
+    exigir_falha_neutra_de_provedor,
+    contexto_nvidia_escasso,
     contexto_nvidia_falso,
     perfil_validado_falso,
     trecho_nvidia_falso,
@@ -173,7 +179,8 @@ def rascunho(
     ids_chunks=(101, 102),
 ):
     return {
-        "gap_enderecado": gap,
+        "tipo_fundamento": "gap_confirmado",
+        "identificador_fundamento": gap,
         "tecnologias": list(tecnologias),
         "justificativa_tecnica": (
             "O serving dedicado remove a dependência de uma API externa de inferência."
@@ -248,7 +255,12 @@ def test_ids_de_afirmacao_sao_resolvidos_para_evidencia_completa():
 
 
 def test_ids_de_chunk_sao_resolvidos_para_citacao_completa():
-    saida = executar(ProvedorSequencialFalso(lote(rascunho(ids_chunks=(101,)))))
+    saida = executar(
+        ProvedorSequencialFalso(
+            # a tecnologia citada precisa ser a do próprio chunk
+            lote(rascunho(tecnologias=("NVIDIA NIM",), ids_chunks=(101,)))
+        )
+    )
     citacoes = _recomendacao(saida).citacoes_nvidia
 
     assert [item.id_chunk for item in citacoes] == [101]
@@ -272,14 +284,23 @@ def test_no_escreve_apenas_os_campos_que_lhe_pertencem():
 def test_produz_ate_cinco_recomendacoes_no_caminho_normal():
     """Cada um dos cinco gaps cita ao menos um id que o sustenta de fato."""
     rascunhos = [
-        rascunho(gap="dados_proprietarios", tecnologias=("cuDF",), ids_afirmacoes=(1,)),
         rascunho(
-            gap="workflow_profundo", tecnologias=("NVIDIA Riva",), ids_afirmacoes=(2,)
+            gap="dados_proprietarios",
+            tecnologias=("NVIDIA RAPIDS",),
+            ids_afirmacoes=(1,),
+            ids_chunks=(105,),
+        ),
+        rascunho(
+            gap="workflow_profundo",
+            tecnologias=("NVIDIA Riva",),
+            ids_afirmacoes=(2,),
+            ids_chunks=(108,),
         ),
         rascunho(
             gap="distribuicao",
             tecnologias=("NVIDIA Inception",),
             ids_afirmacoes=(3,),
+            ids_chunks=(107,),
         ),
         rascunho(gap="otimizacao_tecnica", ids_afirmacoes=(4,)),
         rascunho(
@@ -324,7 +345,8 @@ def test_complexidade_usa_a_maior_tecnologia_do_pacote():
         ProvedorSequencialFalso(
             lote(
                 rascunho(
-                    tecnologias=("NVIDIA Triton Inference Server", "TensorRT-LLM")
+                    tecnologias=("NVIDIA Triton Inference Server", "TensorRT-LLM"),
+                    ids_chunks=(102, 103),
                 )
             )
         )
@@ -500,6 +522,7 @@ def test_tecnologia_candidata_do_gap_escolhido_e_aceita():
                     gap="workflow_profundo",
                     tecnologias=("NVIDIA Riva",),
                     ids_afirmacoes=(2,),
+                    ids_chunks=(108,),
                 )
             )
         ),
@@ -522,7 +545,7 @@ def test_citacao_apenas_conceitual_e_recusada():
 
 def test_chunk_conceitual_e_aceito_como_contexto_adicional():
     saida = executar(
-        ProvedorSequencialFalso(lote(rascunho(ids_chunks=(101, 106))))
+        ProvedorSequencialFalso(lote(rascunho(ids_chunks=(102, 106))))
     )
     citacoes = _recomendacao(saida).citacoes_nvidia
     assert {item.origem for item in citacoes} == {"tecnologia", "conceitual"}
@@ -575,7 +598,7 @@ def test_descarte_parcial_preserva_as_recomendacoes_com_lastro():
 
     assert provedor.chamadas == 2
     assert len(saida["recomendacoes"]) == 1
-    assert _recomendacao(saida).gap_enderecado == "otimizacao_tecnica"
+    assert _recomendacao(saida).identificador_fundamento == "otimizacao_tecnica"
     assert len(saida["erros"]) == 1
     assert "dependencia_api_externa" in saida["erros"][0]
     assert "NVIDIA Riva" in saida["erros"][0]
@@ -714,7 +737,7 @@ def test_dimensao_com_capacidade_confirmada_e_recusada_como_gap():
 def test_gap_estrutural_citando_apenas_evidencia_alheia_e_recusado():
     """otimizacao_tecnica é gap, mas o rascunho cita só a afirmação 3."""
     mensagem = _recusa([rascunho(gap="otimizacao_tecnica", ids_afirmacoes=(3,))])
-    assert "não sustentam o gap" in mensagem
+    assert "não sustentam o fundamento" in mensagem
     assert "otimizacao_tecnica" in mensagem
 
 
@@ -725,7 +748,7 @@ def test_gap_estrutural_citando_a_propria_evidencia_e_aceito():
         )
     )
     recomendacao = _recomendacao(saida)
-    assert recomendacao.gap_enderecado == "otimizacao_tecnica"
+    assert recomendacao.identificador_fundamento == "otimizacao_tecnica"
     assert 1 in [item.id_afirmacao for item in recomendacao.evidencias_startup]
 
 
@@ -741,7 +764,7 @@ def test_gap_de_dor_citando_afirmacao_da_mesma_categoria_e_aceito():
             )
         )
     )
-    assert _recomendacao(saida).gap_enderecado == "dependencia_api_externa"
+    assert _recomendacao(saida).identificador_fundamento == "dependencia_api_externa"
 
 
 def test_gap_de_dor_citando_apenas_outra_categoria_e_recusado():
@@ -754,7 +777,7 @@ def test_gap_de_dor_citando_apenas_outra_categoria_e_recusado():
             )
         ]
     )
-    assert "não sustentam o gap" in mensagem
+    assert "não sustentam o fundamento" in mensagem
     assert "dependencia_api_externa" in mensagem
 
 
@@ -797,7 +820,7 @@ def test_sem_nenhum_gap_sustentado_o_provedor_nao_e_chamado():
     )
     provedor = ProvedorSequencialFalso(lote(rascunho()))
     motivo = sem_recomendacao(executar(provedor, estado_pos_rag(perfil=perfil)))
-    assert "nenhum gap está sustentado" in motivo
+    assert "nenhum fundamento está sustentado" in motivo
     assert provedor.chamadas == 0
 
 
@@ -818,7 +841,7 @@ def test_sem_gap_sustentado_nada_e_gravado_nem_pontuado(monkeypatch):
             estado_pos_rag(perfil=perfil),
         )
     )
-    assert "nenhum gap está sustentado" in motivo
+    assert "nenhum fundamento está sustentado" in motivo
     assert chamadas == []
 
 
@@ -843,7 +866,7 @@ def test_gap_invalido_nao_sobrevive_ao_lado_de_um_rascunho_valido():
     )
     saida = executar(provedor)
 
-    assert [item["gap_enderecado"] for item in saida["recomendacoes"]] == [
+    assert [item["identificador_fundamento"] for item in saida["recomendacoes"]] == [
         "otimizacao_tecnica"
     ]
     assert len(saida["erros"]) == 1
@@ -857,7 +880,7 @@ def test_prompt_separa_gaps_sustentados_dores_e_dimensoes_bloqueadas():
 
     assert "Dimensões estruturais confirmadas como gap: otimizacao_tecnica" in prompt
     assert "Categorias de dor documentada por afirmação confirmada: " in prompt
-    assert "dependencia_api_externa (sustentado pelas afirmações [2])" in prompt
+    assert "dependencia_api_externa (sustentada pelas afirmações [2])" in prompt
     assert "NÃO podem ser recomendadas como gap" in prompt
     assert "distribuicao (desconhecido)" in prompt
 
@@ -867,10 +890,10 @@ def test_prompt_so_oferece_o_catalogo_dos_gaps_sustentados():
     executar(provedor)
     instrucao = provedor.mensagens[0][0][1]
 
-    assert "  - otimizacao_tecnica:" in instrucao
-    assert "  - dependencia_api_externa:" in instrucao
-    assert "  - distribuicao:" not in instrucao
-    assert "  - workflow_profundo:" not in instrucao
+    assert "  - [gap_confirmado] otimizacao_tecnica:" in instrucao
+    assert "  - [gap_confirmado] dependencia_api_externa:" in instrucao
+    assert "  - [gap_confirmado] distribuicao:" not in instrucao
+    assert "  - [gap_confirmado] workflow_profundo:" not in instrucao
 
 
 # ----------------------------------------------------------------------
@@ -880,7 +903,7 @@ def test_prompt_so_oferece_o_catalogo_dos_gaps_sustentados():
 
 def _gaps(saida) -> list[str]:
     return [
-        Recomendacao.model_validate(item).gap_enderecado
+        Recomendacao.model_validate(item).identificador_fundamento
         for item in saida["recomendacoes"]
     ]
 
@@ -1010,3 +1033,238 @@ def test_prioridade_media_para_estagio_series_b_com_dor_citada():
         ProvedorSequencialFalso(lote(rascunho(ids_afirmacoes=(1, 2)))), estado
     )
     assert _recomendacao(saida).prioridade == "media"
+
+
+# ----------------------------------------------------------------------
+# §6.1b — fundamento sustentado, mas sem tecnologia no contexto recuperado
+# ----------------------------------------------------------------------
+
+
+def perfil_so_com_sinal_de_ciberseguranca():
+    """Uma oportunidade confirmada e nada mais: nenhum gap, nenhuma dor."""
+    return perfil_validado_falso(
+        [
+            afirmacao_validada_falsa(
+                1, "stack_propria", sinais_tecnicos=["ciberseguranca_em_escala"]
+            )
+        ]
+    )
+
+
+def test_fundamento_sem_tecnologia_no_contexto_nao_chama_o_provedor():
+    """As candidatas de ciberseguranca são Morpheus e AI Enterprise; o contexto
+    escasso não tem nenhuma das duas, então não há o que pedir ao modelo."""
+    provedor = ProvedorSequencialFalso()
+
+    saida = executar(
+        provedor,
+        estado_pos_rag(
+            perfil=perfil_so_com_sinal_de_ciberseguranca(),
+            classificacao=classificacao_de([1]),
+            contexto=contexto_nvidia_escasso(),
+        ),
+    )
+
+    motivo = sem_recomendacao(saida)
+    assert provedor.chamadas == 0
+    assert "nenhuma tecnologia NVIDIA correspondente" in motivo
+    assert saida["trajeto"] == ["recommendation"]
+
+
+def test_o_mesmo_perfil_com_contexto_rico_tambem_nao_inventa_tecnologia():
+    """Prova que o corte é da interseção, não do sinal: nem o contexto farto
+    tem Morpheus ou AI Enterprise, então o resultado honesto é o mesmo."""
+    provedor = ProvedorSequencialFalso()
+
+    saida = executar(
+        provedor,
+        estado_pos_rag(
+            perfil=perfil_so_com_sinal_de_ciberseguranca(),
+            classificacao=classificacao_de([1]),
+        ),
+    )
+
+    sem_recomendacao(saida)
+    assert provedor.chamadas == 0
+
+
+# ----------------------------------------------------------------------
+# §10.2 — prioridade do fundamento tipado
+# ----------------------------------------------------------------------
+
+
+def classificacao_de(ids):
+    """Classificação cujo suporte existe no perfil enxuto destes cenários."""
+    return Classificacao(
+        classe="AI-enabled",
+        justificativa=(
+            "O material público descreve a carga de trabalho vendida. "
+            "A evidência citada sustenta a classe atribuída."
+        ),
+        ids_afirmacoes_suporte=list(ids),
+    )
+
+
+def rascunho_oportunidade(
+    identificador="visao_computacional",
+    tecnologias=("NVIDIA NIM",),
+    ids_afirmacoes=(1,),
+    ids_chunks=(101,),
+):
+    return {
+        "tipo_fundamento": "oportunidade_confirmada",
+        "identificador_fundamento": identificador,
+        "tecnologias": list(tecnologias),
+        "justificativa_tecnica": (
+            "O serving dedicado acelera a carga de trabalho descrita na fonte."
+        ),
+        "justificativa_negocio": (
+            "O custo por chamada fica previsível para quem compra o produto."
+        ),
+        "proxima_acao": {
+            "tipo_acao": "call_tecnica_descoberta",
+            "detalhe": "Agendar a call técnica de descoberta nesta semana.",
+        },
+        "ids_afirmacoes": list(ids_afirmacoes),
+        "ids_chunks": list(ids_chunks),
+    }
+
+
+def perfil_com_oportunidade_de_visao():
+    return perfil_validado_falso(
+        [
+            afirmacao_validada_falsa(
+                1, "stack_propria", sinais_tecnicos=["visao_computacional"]
+            )
+        ]
+    )
+
+
+def perfil_com_dor_que_tambem_carrega_sinal():
+    """A mesma afirmação é dor documentada **e** carrega o sinal.
+
+    Nada é fabricado: depender de API externa para inferência de LLM é, ao
+    mesmo tempo, a dor e a carga de trabalho.
+    """
+    return perfil_validado_falso(
+        [
+            afirmacao_validada_falsa(
+                1, "dependencia_api_externa", sinais_tecnicos=["inferencia_llm"]
+            )
+        ]
+    )
+
+
+def test_oportunidade_sem_dor_citada_recebe_prioridade_baixa():
+    saida = executar(
+        ProvedorSequencialFalso(lote(rascunho_oportunidade())),
+        estado_pos_rag(
+            perfil=perfil_com_oportunidade_de_visao(),
+            classificacao=classificacao_de([1]),
+        ),
+    )
+
+    recomendacao = _recomendacao(saida)
+
+    assert recomendacao.tipo_fundamento == "oportunidade_confirmada"
+    assert recomendacao.identificador_fundamento == "visao_computacional"
+    assert recomendacao.prioridade == "baixa"
+
+
+def test_a_complexidade_da_oportunidade_sai_da_regra_deterministica():
+    saida = executar(
+        ProvedorSequencialFalso(lote(rascunho_oportunidade())),
+        estado_pos_rag(
+            perfil=perfil_com_oportunidade_de_visao(),
+            classificacao=classificacao_de([1]),
+        ),
+    )
+    recomendacao = _recomendacao(saida)
+
+    esperada = calcular_complexidade(
+        recomendacao.tecnologias, _pontos_centralidade(saida["fit_score"])
+    )
+
+    assert recomendacao.complexidade == esperada
+
+
+def test_oportunidade_com_dor_citada_segue_a_regra_de_estagio():
+    saida = executar(
+        ProvedorSequencialFalso(
+            lote(rascunho_oportunidade(identificador="inferencia_llm"))
+        ),
+        estado_pos_rag(
+            perfil=perfil_com_dor_que_tambem_carrega_sinal(),
+            classificacao=classificacao_de([1]),
+        ),
+    )
+    recomendacao = _recomendacao(saida)
+
+    esperada = calcular_prioridade(
+        ["dependencia_api_externa"],
+        empresa_falsa().estagio,
+        gap_confirmado=False,
+    )
+
+    assert recomendacao.prioridade == esperada
+    assert recomendacao.prioridade in ("alta", "media")
+
+
+def test_rotular_oportunidade_como_gap_nao_passa_pela_proveniencia():
+    """Subir a prioridade fingindo gap é exatamente o que a conferência barra."""
+    disfarce = rascunho_oportunidade()
+    disfarce["tipo_fundamento"] = "gap_confirmado"
+    disfarce["identificador_fundamento"] = "otimizacao_tecnica"
+    provedor = ProvedorSequencialFalso(lote(disfarce), lote(disfarce))
+
+    saida = executar(
+        provedor,
+        estado_pos_rag(
+            perfil=perfil_com_oportunidade_de_visao(),
+            classificacao=classificacao_de([1]),
+        ),
+    )
+
+    motivo = sem_recomendacao(saida)
+    assert "não está sustentad" in motivo
+    assert provedor.chamadas == 2
+
+
+# ----------------------------------------------------------------------
+# Falha segura: a mensagem não nomeia o provedor
+# ----------------------------------------------------------------------
+
+
+def test_queda_do_provedor_nao_nomeia_gemini_nem_groq():
+    provedor = ProvedorSequencialFalso(ConnectionError(CORPO_BRUTO_DO_PROVEDOR))
+    entrada = estado_pos_rag()
+
+    with pytest.raises(ErroRecommendation) as falha:
+        executar(provedor, entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "nenhuma recomendação foi fabricada" in mensagem
+    assert provedor.chamadas == 1
+    assert falha_operacional(falha.value) is True
+    # O estado entra com os dois campos nulos e sai igual: nada foi fabricado.
+    assert entrada["recomendacoes"] is None
+    assert entrada["fit_score"] is None
+
+
+def test_duas_respostas_fora_do_contrato_nao_nomeiam_o_provedor():
+    provedor = ProvedorSequencialFalso({"rascunhos": []}, {"rascunhos": []})
+    entrada = estado_pos_rag()
+
+    with pytest.raises(ErroRecommendation) as falha:
+        executar(provedor, entrada)
+
+    mensagem = str(falha.value)
+    exigir_falha_neutra_de_provedor(mensagem)
+    assert "duas vezes fora do contrato estruturado" in mensagem
+    assert "nenhuma recomendação foi gravada no estado" in mensagem
+    assert provedor.chamadas == 2
+    assert falha_operacional(falha.value) is False
+    # O estado entra com os dois campos nulos e sai igual: nada foi fabricado.
+    assert entrada["recomendacoes"] is None
+    assert entrada["fit_score"] is None

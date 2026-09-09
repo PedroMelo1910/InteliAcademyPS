@@ -1,3 +1,5 @@
+"""Classifica o perfil extraído sem acessar o rótulo de avaliação da curadoria."""
+
 from __future__ import annotations
 
 import re
@@ -12,7 +14,7 @@ from radar.contratos import (
     EstadoRadar,
     PerfilExtraido,
 )
-from radar.provedores import ProvedorClassificacao
+from radar.provedores import ErroReservaIncompativel, ProvedorClassificacao
 
 
 # Campos de estado derivados da classificação. O nó invalida cada um deles a
@@ -114,9 +116,18 @@ class Classifier:
                 if tentativa == 1:
                     raise ErroClassificador(self._MENSAGEM_FALHA_DUPLA) from exc
                 continue
+            except ErroReservaIncompativel as exc:
+                # A reserva recusou o **pedido** estruturado (HTTP 400), não caiu.
+                # Isso é falha de contrato na fronteira de provedores, e falha de
+                # contrato é exatamente o que a tentativa corretiva deste nó existe
+                # para absorver — consome a mesma, nunca uma terceira. O prompt não
+                # ganha aviso de correção: o modelo não respondeu nada errado.
+                if tentativa == 1:
+                    raise ErroClassificador(self._MENSAGEM_FALHA_DUPLA) from exc
+                continue
             except Exception as exc:
                 raise ErroClassificador(
-                    "O Gemini não respondeu ao Classifier; "
+                    "O provedor de IA não respondeu ao Classifier; "
                     "nenhuma classificação foi fabricada."
                 ) from exc
             try:
@@ -128,7 +139,7 @@ class Classifier:
         raise AssertionError("laço de validação terminou em estado impossível")
 
     _MENSAGEM_FALHA_DUPLA = (
-        "O Gemini respondeu duas vezes fora do contrato estruturado; "
+        "O provedor de IA respondeu duas vezes fora do contrato estruturado; "
         "nenhuma classificação foi gravada no estado."
     )
 

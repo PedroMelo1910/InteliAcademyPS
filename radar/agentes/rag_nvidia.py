@@ -1,3 +1,5 @@
+"""Recupera o contexto técnico NVIDIA necessário para gerar recomendações."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -5,6 +7,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from radar.contratos import (
+    SINAIS_TECNICOS,
+    TECNOLOGIAS_NVIDIA,
     ContextoNvidia,
     EmpresaCandidata,
     EstadoRadar,
@@ -12,6 +16,10 @@ from radar.contratos import (
     ResultadoRecuperacao,
 )
 from radar.provedores import ProvedorContextoNvidia
+from radar.regras_recomendacao import (
+    fundamentos_disponiveis,
+    tecnologias_candidatas,
+)
 
 
 # O contexto NVIDIA é a entrada da recomendação e do fit-score. Trocá-lo sem
@@ -50,9 +58,14 @@ def montar_consulta_nvidia(
     """Deriva a consulta apenas do perfil validado e dos dados já aprovados.
 
     A assinatura é a garantia estrutural mais forte deste nó: não existe
-    parâmetro por onde ``classe_referencia`` — o rótulo de curadoria que o
-    núcleo nunca pode ler — entraria na consulta. Afirmação derrubada não
-    contribui, e dimensão com capacidade confirmada não vira gap.
+    parâmetro por onde o rótulo de curadoria — que o núcleo nunca pode ler —
+    entraria na consulta. Afirmação derrubada não contribui, e dimensão com
+    capacidade confirmada não vira gap.
+
+    A consulta cobre as três origens que a elegibilidade aceita: gap estrutural
+    confirmado, dor documentada e oportunidade técnica confirmada. Sem o
+    terceiro, a evidência que autorizou a recomendação não guiaria a busca, e o
+    nó recomendaria sobre trechos genéricos do setor.
     """
     gaps = [
         item.dimensao
@@ -69,11 +82,29 @@ def montar_consulta_nvidia(
         for categoria in CATEGORIAS_DE_DOR_NA_CONSULTA
         if any(item.categoria == categoria for item in confirmadas)
     ]
+    # Só afirmação confirmada carrega sinal: derrubada, ausência declarada e
+    # desconhecido ficam de fora por construção, e setor nunca cria sinal.
+    sinais = [
+        sinal
+        for sinal in SINAIS_TECNICOS
+        if any(sinal in item.sinais_tecnicos for item in confirmadas)
+    ]
+    fundamentos = fundamentos_disponiveis(perfil)
+    conjunto_tecnologias = {
+        tecnologia
+        for tipo, identificador in fundamentos
+        for tecnologia in tecnologias_candidatas(tipo, identificador)
+    }
+    tecnologias = [
+        tecnologia
+        for tecnologia in TECNOLOGIAS_NVIDIA
+        if tecnologia in conjunto_tecnologias
+    ]
     categorias_relevantes = set(gaps) | set(dores)
     evidencias = [
         item.texto
         for item in sorted(confirmadas, key=lambda item: item.id_afirmacao)
-        if item.categoria in categorias_relevantes
+        if item.categoria in categorias_relevantes or item.sinais_tecnicos
     ][:MAXIMO_EVIDENCIAS_NA_CONSULTA]
 
     partes = [
@@ -82,9 +113,20 @@ def montar_consulta_nvidia(
         + (", ".join(_rotulo(gap) for gap in gaps) or "nenhum"),
         "dores documentadas: "
         + (", ".join(_rotulo(dor) for dor in dores) or "nenhuma"),
+        "oportunidades confirmadas: "
+        + (", ".join(_rotulo(sinal) for sinal in sinais) or "nenhuma"),
     ]
     if evidencias:
         partes.append("evidências: " + " ".join(evidencias))
+    if tecnologias:
+        # Os nomes não autorizam recomendação por si sós: apenas fazem o RAG
+        # cobrir ao menos uma tecnologia que a regra já permitiu para um
+        # fundamento confirmado. A Recommendation continua exigindo lastro
+        # dos dois lados e resolve somente chunks realmente recuperados.
+        partes.append(
+            "tecnologias NVIDIA candidatas pela regra: "
+            + ", ".join(tecnologias)
+        )
     return "; ".join(partes)
 
 

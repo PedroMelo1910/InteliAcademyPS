@@ -30,7 +30,7 @@
     {
       "tipo": "notícia",
       "titulo": "Startup de seguro auto usa telemetria para mapear a forma de direção dos motoristas",
-      "conteudo_texto": "A matéria descreve a coleta de dados de GPS e dos sensores de movimento do celular para avaliar percursos realizados por motoristas. Segundo o texto, os dados são processados para gerar uma nota de direção e podem permitir à Justos oferecer preços aproximadamente até vinte por cento menores para motoristas considerados conscientes.",
+      "conteudo_texto": "A matéria descreve que dados de GPS e dos sensores de movimento do celular são coletados durante os percursos e processados para gerar uma nota de direção. Segundo o texto, essa avaliação do comportamento ao volante pode permitir à Justos oferecer preços aproximadamente até vinte por cento menores para motoristas considerados conscientes.",
       "url_fonte": "https://revistacobertura.com.br/noticias/auto-servicos/startup-de-seguro-auto-utiliza-tecnologia-pioneira-para-mapear-a-forma-de-direcao-dos-motoristas/",
       "dominio_fonte": "revistacobertura.com.br",
       "data_publicacao": "2023-05-10",

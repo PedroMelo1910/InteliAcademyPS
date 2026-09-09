@@ -10,7 +10,6 @@ import pytest
 from radar.contratos import TECNOLOGIAS_NVIDIA
 from radar.regras_recomendacao import (
     CATEGORIAS_DE_DOR,
-    conferir_gap_sustentado,
     gaps_sustentados,
     COMPLEXIDADE_POR_TECNOLOGIA,
     COMPLEXIDADES_RECOMENDACAO,
@@ -59,14 +58,14 @@ def test_candidatas_nao_repetem_tecnologia_dentro_do_mesmo_gap():
 
 
 def test_tecnologias_candidatas_devolve_o_conjunto_do_gap():
-    assert tecnologias_candidatas("otimizacao_tecnica") == TECNOLOGIAS_POR_GAP[
+    assert tecnologias_candidatas("gap_confirmado", "otimizacao_tecnica") == TECNOLOGIAS_POR_GAP[
         "otimizacao_tecnica"
     ]
 
 
 def test_tecnologias_candidatas_recusa_gap_fora_do_enum():
     with pytest.raises(ErroRegraRecomendacao, match="gap"):
-        tecnologias_candidatas("gap_inventado")
+        tecnologias_candidatas("gap_confirmado", "gap_inventado")
 
 
 def test_dependencia_de_api_externa_oferece_o_pacote_do_tapi():
@@ -75,6 +74,11 @@ def test_dependencia_de_api_externa_oferece_o_pacote_do_tapi():
         "NVIDIA NIM",
         "NeMo Guardrails",
         "NVIDIA Triton Inference Server",
+        # Uma API externa pode ser de voz, não apenas de LLM. O TAPI cita
+        # explicitamente Riva para voz/call center/transcrição; sem esta
+        # candidata, a Carecode tinha evidência de ElevenAgents e o RAG
+        # recuperava Riva, mas a interseção determinística ficava vazia.
+        "NVIDIA Riva",
     } <= candidatas
 
 
@@ -327,22 +331,3 @@ def test_gaps_sustentados_seguem_a_ordem_do_contrato():
         "dados_proprietarios",
         "dependencia_api_externa",
     ]
-
-
-def test_conferir_aceita_id_que_pertence_ao_gap():
-    sustentados = {"otimizacao_tecnica": frozenset({1, 4})}
-    conferir_gap_sustentado("otimizacao_tecnica", [4, 9], sustentados)
-
-
-def test_conferir_recusa_gap_sem_sustentacao():
-    with pytest.raises(ErroRegraRecomendacao, match="não está sustentado"):
-        conferir_gap_sustentado("distribuicao", [1], {"otimizacao_tecnica": frozenset({1})})
-
-
-def test_conferir_recusa_evidencia_que_nao_pertence_ao_gap():
-    sustentados = {
-        "workflow_profundo": frozenset({2}),
-        "otimizacao_tecnica": frozenset({1}),
-    }
-    with pytest.raises(ErroRegraRecomendacao, match="não sustentam o gap"):
-        conferir_gap_sustentado("workflow_profundo", [1], sustentados)

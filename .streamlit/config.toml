@@ -1,0 +1,46 @@
+# Tema do NVIDIA AI Radar.
+#
+# As cores que o próprio Streamlit precisa conhecer moram aqui; o ritmo de
+# espaçamento e os acentos de cartão moram em `radar/interface/tema.py`. A
+# divisão é deliberada: o que o framework sabe temear nativamente não vira CSS.
+#
+# Regra semântica da paleta: verde é aderência NVIDIA validada. Âmbar nomeia
+# ausência de lastro, cinza cobre o que ainda não foi analisado e vermelho fica
+# reservado à falha operacional.
+
+[theme]
+base = "light"
+
+primaryColor = "#76B900"
+backgroundColor = "#F6F8F4"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#182017"
+linkColor = "#3F6F12"
+borderColor = "#DDE5D8"
+
+baseRadius = "medium"
+buttonRadius = "medium"
+showWidgetBorder = true
+
+baseFontSize = 15
+headingFontSizes = ["2.35rem", "1.55rem", "1.18rem", "1.02rem", "0.95rem", "0.9rem"]
+headingFontWeights = [700, 650, 650, 650, 600, 600]
+metricValueFontSize = "1.75rem"
+metricValueFontWeight = 700
+
+# Selos: cada cor do vocabulário do Streamlit realinhada à paleta do radar.
+greenColor = "#5F9500"
+greenBackgroundColor = "#EDF7DF"
+greenTextColor = "#315B08"
+orangeColor = "#E0A32E"
+orangeBackgroundColor = "#FFF6E0"
+orangeTextColor = "#76510A"
+violetColor = "#6F5AB6"
+violetBackgroundColor = "#F1EEFC"
+violetTextColor = "#49377F"
+blueColor = "#356F9C"
+blueBackgroundColor = "#EAF4FB"
+blueTextColor = "#244F70"
+grayColor = "#75806F"
+grayBackgroundColor = "#F0F3EE"
+grayTextColor = "#4F5A4B"

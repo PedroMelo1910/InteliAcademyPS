@@ -1,11 +1,23 @@
+"""Regressão offline ponta a ponta sobre a base curada real.
+
+A fatia inteira, de descoberta a aprofundamento, rodando o grafo de verdade
+contra o SQLite curado — com todos os provedores injetados como dublês. O que
+se prova aqui é o encadeamento: trajeto, checkpoint, R2 em modo estrito,
+conflito datado no histórico, isolamento entre threads e criação idempotente da
+aplicação. A variante com documentos sintéticos vive em
+``test_regressao_grafo_sintetico.py``.
+"""
+
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
 from radar.agentes.classifier import ErroClassificador
 from radar.agentes.extractor import ErroExtractor
 from radar.agentes.roteadores import rotear_r1, rotear_r3
+from radar.configuracao import MINIMO_CANDIDATAS_UTEIS
 from radar.aplicacao import criar_aplicacao
 from radar.base_startups import BaseStartups
 from radar.configuracao import ErroConfiguracao
@@ -17,19 +29,7 @@ from radar.contratos import (
     PlanoConsulta,
 )
 from radar.grafo import montar_grafo
-from tests.conftest import ConsultorNvidiaFalso
-
-
-class ProvedorFixo:
-    def __init__(self, resposta):
-        self.resposta = resposta
-        self.chamadas = 0
-        self.mensagens = []
-
-    def invocar(self, mensagens):
-        self.chamadas += 1
-        self.mensagens.append(mensagens)
-        return self.resposta
+from tests.conftest import ConsultorNvidiaFalso, ProvedorFixo
 
 
 class BaseComPrimeiraVerificacaoCorrompida(BaseStartups):
@@ -130,7 +130,8 @@ def classificacao_caju():
 def rascunho_nim(id_afirmacao: int = 2) -> dict:
     """Endereça a dor documentada citando justamente o id que a sustenta."""
     return {
-        "gap_enderecado": "dependencia_api_externa",
+        "tipo_fundamento": "gap_confirmado",
+        "identificador_fundamento": "dependencia_api_externa",
         "tecnologias": ["NVIDIA NIM"],
         "justificativa_tecnica": (
             "O microserviço hospedado substitui a dependência de API externa."
@@ -224,20 +225,34 @@ def test_ranking_da_aplicacao_recebe_resultado_real_do_retriever(
     assert provedor_extracao.chamadas == 0
     assert provedor_classificacao.chamadas == 0
     assert saida.rota == "candidatas_prontas"
-    assert [item.empresa.nome for item in saida.ranking] == ["Caju"]
+    # O setor controlado isola a Caju; R1 exige ranking útil e a escada amplia
+    # a busca sem uma segunda chamada ao Query Planner (`provedor.chamadas`).
+    nomes = [item.empresa.nome for item in saida.ranking]
+    assert nomes[0] == "Caju"
+    assert len(nomes) >= MINIMO_CANDIDATAS_UTEIS
     assert saida.ranking[0].documentos
-    assert saida.trajeto == ("query_planner", "retriever")
+    assert saida.tentativas_relaxamento > 0
+    assert saida.trajeto[:2] == ("query_planner", "retriever")
+    assert saida.trajeto[-1] == "retriever"
     with sqlite3.connect(checkpoints) as conexao:
         assert conexao.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0] > 0
 
 
-def test_chave_gemini_ausente_gera_erro_de_configuracao(monkeypatch, tmp_path):
+def test_chave_gemini_ausente_gera_erro_de_configuracao(
+    monkeypatch, tmp_path, caminho_banco
+):
+    """Com o banco já inicializado, o que falta é a credencial.
+
+    O banco vem da fixture porque ``criar_aplicacao`` deixou de semear: um
+    caminho inexistente agora falha antes, no pré-requisito de base, e este
+    teste perderia o alvo — a validação da chave.
+    """
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.setattr("radar.aplicacao.load_dotenv", lambda *_args, **_kwargs: False)
 
     with pytest.raises(ErroConfiguracao, match="GOOGLE_API_KEY"):
         criar_aplicacao(
-            caminho_banco=tmp_path / "radar_sem_chave.db",
+            caminho_banco=caminho_banco,
             caminho_checkpoints=tmp_path / "checkpoints_sem_chave.db",
         )
 
@@ -889,3 +904,91 @@ def test_duas_analises_no_mesmo_thread_produzem_avisos_de_conflito_distinguiveis
     assert segunda["trajeto"][: len(primeira["trajeto"])] == primeira["trajeto"]
     assert segunda["trajeto"].count("evidence_validator") == 2
     assert len(segunda["trajeto"]) == 2 * len(primeira["trajeto"])
+
+
+# ----------------------------------------------------------------------
+# Abrir a aplicação lê a base; não a reconstrói
+# ----------------------------------------------------------------------
+#
+# ``criar_aplicacao`` chamava ``inicializar_banco`` sem condição: cada boot do
+# Streamlit refazia o upsert das startups e dos documentos e reconstruía o
+# índice FTS. A arquitetura (§4.2) diz que a base é estática em execução e
+# (§9.1) que ``aplicacao`` só orquestra e exibe. O seed pertence ao comando
+# explícito ``python -m scripts.inicializar_base``.
+
+
+def _impressao_do_banco(caminho) -> tuple[str, int]:
+    import hashlib
+
+    dados = Path(caminho).read_bytes()
+    return hashlib.sha256(dados).hexdigest(), len(dados)
+
+
+def _provedores_offline_completos():
+    return dict(
+        provedor_extracao=ProvedorFixo(None),
+        provedor_classificacao=ProvedorFixo(None),
+        consultor_nvidia=consultor_nvidia_padrao(),
+        provedor_recomendacao=provedor_recomendacao_padrao(),
+        provedor_briefing=provedor_briefing_padrao(),
+    )
+
+
+def test_criar_aplicacao_nao_reescreve_a_base_nem_o_indice(tmp_path, caminho_banco):
+    antes = _impressao_do_banco(caminho_banco)
+
+    criar_aplicacao(
+        ProvedorFixo(plano_caju()),
+        caminho_banco,
+        tmp_path / "checkpoints_leitura.db",
+        **_provedores_offline_completos(),
+    )
+
+    assert _impressao_do_banco(caminho_banco) == antes
+
+
+def test_criar_aplicacao_repetida_e_idempotente(tmp_path, caminho_banco):
+    criar_aplicacao(
+        ProvedorFixo(plano_caju()),
+        caminho_banco,
+        tmp_path / "checkpoints_um.db",
+        **_provedores_offline_completos(),
+    )
+    depois_da_primeira = _impressao_do_banco(caminho_banco)
+
+    criar_aplicacao(
+        ProvedorFixo(plano_caju()),
+        caminho_banco,
+        tmp_path / "checkpoints_dois.db",
+        **_provedores_offline_completos(),
+    )
+
+    assert _impressao_do_banco(caminho_banco) == depois_da_primeira
+
+
+def test_banco_ausente_falha_com_o_comando_documentado(tmp_path):
+    ausente = tmp_path / "radar_inexistente.db"
+
+    with pytest.raises(ErroConfiguracao, match="scripts.inicializar_base"):
+        criar_aplicacao(
+            ProvedorFixo(plano_caju()),
+            ausente,
+            tmp_path / "checkpoints_ausente.db",
+            **_provedores_offline_completos(),
+        )
+
+    assert not ausente.exists(), "não pode criar banco incompleto em silêncio"
+
+
+def test_banco_sem_schema_falha_com_seguranca(tmp_path):
+    vazio = tmp_path / "radar_vazio.db"
+    with sqlite3.connect(vazio) as conexao:
+        conexao.execute("CREATE TABLE irrelevante (id INTEGER)")
+
+    with pytest.raises(ErroConfiguracao, match="scripts.inicializar_base"):
+        criar_aplicacao(
+            ProvedorFixo(plano_caju()),
+            vazio,
+            tmp_path / "checkpoints_vazio.db",
+            **_provedores_offline_completos(),
+        )

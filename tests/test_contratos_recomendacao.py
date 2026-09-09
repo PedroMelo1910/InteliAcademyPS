@@ -1,3 +1,12 @@
+"""Contratos de recomendação, fit-score e relatório, validados sem nó nenhum.
+
+Além da forma de cada modelo, aqui mora a regra de lastro cruzado: exigir
+apenas "ao menos uma citação de origem tecnologia" deixaria passar o pior caso
+— recomendar CUDA sustentando com um chunk de NIM. O trecho existe, a
+proveniência formal fecha, e mesmo assim a recomendação não tem lastro sobre a
+tecnologia que ela oferece.
+"""
+
 from datetime import date
 
 import pytest
@@ -15,11 +24,12 @@ from radar.contratos import (
     RecomendacaoRascunho,
     RelatorioRecomendacoes,
 )
-
+from tests.conftest import citacao_nvidia_falsa, recomendacao_falsa
 
 def rascunho_valido() -> dict:
     return {
-        "gap_enderecado": "otimizacao_tecnica",
+        "tipo_fundamento": "gap_confirmado",
+        "identificador_fundamento": "otimizacao_tecnica",
         "tecnologias": ["NVIDIA NIM"],
         "justificativa_tecnica": "NIM permite servir modelos por API.",
         "justificativa_negocio": "A adoção pode reduzir atrito operacional.",
@@ -34,7 +44,8 @@ def rascunho_valido() -> dict:
 
 def recomendacao_valida(gap: str = "otimizacao_tecnica") -> Recomendacao:
     return Recomendacao(
-        gap_enderecado=gap,
+        tipo_fundamento="gap_confirmado",
+        identificador_fundamento=gap,
         tecnologias=["NVIDIA NIM"],
         justificativa_tecnica="NIM permite servir modelos por uma API otimizada.",
         justificativa_negocio="A adoção pode reduzir o atrito operacional.",
@@ -189,7 +200,7 @@ def test_relatorio_aceita_gaps_distintos_ate_o_teto():
             recomendacao_valida("dependencia_api_externa"),
         ]
     )
-    gaps = [item.gap_enderecado for item in relatorio.recomendacoes]
+    gaps = [item.identificador_fundamento for item in relatorio.recomendacoes]
     assert len(gaps) == len(set(gaps)) == 5
 
 
@@ -281,4 +292,65 @@ def test_metadado_rejeita_host_que_nao_corresponde_a_url():
             url_fonte="https://fonte-correta.example/artigo",
             host_normalizado="outra-fonte.example",
             data_publicacao=None,
+        )
+
+
+# ------------------------------------------------------------------------
+# Toda tecnologia recomendada exige citação daquela mesma tecnologia
+# ------------------------------------------------------------------------
+
+def test_cuda_sustentado_apenas_por_chunk_de_nim_e_recusado():
+    with pytest.raises(ValidationError, match="CUDA"):
+        recomendacao_falsa(
+            "otimizacao_tecnica",
+            tecnologias=["CUDA"],
+            citacao=citacao_nvidia_falsa(101, tecnologia="NVIDIA NIM"),
+        )
+
+
+def test_a_citacao_da_propria_tecnologia_e_aceita():
+    recomendacao = recomendacao_falsa(
+        "otimizacao_tecnica",
+        tecnologias=["CUDA"],
+        citacao=citacao_nvidia_falsa(101, tecnologia="CUDA"),
+    )
+
+    assert recomendacao.tecnologias == ["CUDA"]
+
+
+def test_contexto_conceitual_adicional_continua_permitido():
+    from radar.contratos import Recomendacao
+
+    base = recomendacao_falsa(
+        "otimizacao_tecnica",
+        tecnologias=["CUDA"],
+        citacao=citacao_nvidia_falsa(101, tecnologia="CUDA"),
+    )
+    completa = Recomendacao(
+        **{
+            **base.model_dump(),
+            "citacoes_nvidia": [
+                *[item.model_dump() for item in base.citacoes_nvidia],
+                citacao_nvidia_falsa(106, tecnologia=None, origem="conceitual").model_dump(),
+            ],
+        }
+    )
+
+    assert len(completa.citacoes_nvidia) == 2
+
+
+def test_toda_tecnologia_de_uma_recomendacao_multipla_precisa_de_lastro():
+    from radar.contratos import Recomendacao
+
+    base = recomendacao_falsa(
+        "otimizacao_tecnica",
+        tecnologias=["CUDA"],
+        citacao=citacao_nvidia_falsa(101, tecnologia="CUDA"),
+    )
+    with pytest.raises(ValidationError, match="TensorRT-LLM"):
+        Recomendacao(
+            **{
+                **base.model_dump(),
+                "tecnologias": ["CUDA", "TensorRT-LLM"],
+            }
         )

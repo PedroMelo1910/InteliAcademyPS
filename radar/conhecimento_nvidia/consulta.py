@@ -22,7 +22,7 @@ from radar.configuracao import (
     N_CANDIDATOS_RERANK,
     N_TRECHOS_FINAL,
 )
-from radar.contratos import ContextoNvidia, TrechoNvidia
+from radar.contratos import TECNOLOGIAS_NVIDIA, ContextoNvidia, TrechoNvidia
 from radar.conhecimento_nvidia.ingestao import (
     conectar_conhecimento,
     ler_metadados_indice,
@@ -89,6 +89,70 @@ def fusao_rrf(listas: list[list[int]], k_rrf: int = K_RRF) -> list[int]:
     return sorted(scores, key=lambda id_chunk: (-scores[id_chunk], id_chunk))
 
 
+def _tecnologias_solicitadas(consulta: str) -> tuple[str, ...]:
+    """Reconhece somente nomes do enum explicitamente presentes na consulta."""
+    normalizada = consulta.casefold()
+    return tuple(
+        tecnologia
+        for tecnologia in TECNOLOGIAS_NVIDIA
+        if tecnologia.casefold() in normalizada
+    )
+
+
+def _buscar_sementes_de_tecnologia(
+    conexao: sqlite3.Connection, tecnologias: tuple[str, ...]
+) -> list[int]:
+    """Seleciona um chunk real por tecnologia pedida, sempre por parâmetros."""
+    if not tecnologias:
+        return []
+    marcadores = ", ".join("?" for _ in tecnologias)
+    linhas = conexao.execute(
+        "SELECT id, tecnologia FROM chunks_nvidia WHERE origem = ? "
+        f"AND tecnologia IN ({marcadores}) ORDER BY tecnologia ASC, id ASC",
+        ("tecnologia", *tecnologias),
+    ).fetchall()
+    primeiro_por_tecnologia: dict[str, int] = {}
+    for linha in linhas:
+        primeiro_por_tecnologia.setdefault(linha["tecnologia"], linha["id"])
+    return [
+        primeiro_por_tecnologia[tecnologia]
+        for tecnologia in tecnologias
+        if tecnologia in primeiro_por_tecnologia
+    ]
+
+
+def _reservar_cobertura_pre_rerank(
+    candidatos: list[int], sementes: list[int]
+) -> list[int]:
+    """Reserva **uma** vaga do pool para uma tecnologia autorizada, se preciso.
+
+    A arquitetura (§5.5, §6.1b) descreve uma única guarda de cobertura, que
+    reserva no máximo uma posição. Quem forma o pool de reranking é a busca
+    híbrida — lexical mais vetorial, fundidas por RRF. Esta reserva existe só
+    para que a guarda pós-reranking tenha material com que trabalhar quando a
+    fusão não recuperou nenhum chunk das tecnologias já autorizadas pela regra
+    determinística; ela não cria elegibilidade nem introduz tecnologia fora
+    desse conjunto.
+
+    Uma versão anterior injetava uma semente por tecnologia candidata. Como a
+    consulta gerada nomeia a união das tabelas do fundamento, um único gap
+    estrutural ocupava nove das vinte vagas e quatro gaps ocupavam quinze: o
+    reranker passava a julgar um conjunto escolhido pela tabela, não pela
+    recuperação. A reserva agora é de uma vaga, no máximo, e só quando a busca
+    híbrida não cobriu nenhuma tecnologia autorizada.
+    """
+    pool = list(candidatos[:N_CANDIDATOS_RERANK])
+    if not sementes or any(semente in pool for semente in sementes):
+        return pool
+    # Ordem canônica das sementes: a escolha é determinística e reproduzível.
+    semente = sementes[0]
+    if len(pool) < N_CANDIDATOS_RERANK:
+        pool.append(semente)
+    else:
+        pool[-1] = semente
+    return pool
+
+
 class ConhecimentoNvidia:
     """Boundary direto do RAG NVIDIA: ``consultar(consulta) -> ContextoNvidia``.
 
@@ -142,7 +206,11 @@ class ConhecimentoNvidia:
                 )
             ids_vetoriais = buscar_vetorial(conexao, vetor_consulta)
             fundidos = fusao_rrf([ids_lexicais, ids_vetoriais])
-            candidatos = fundidos[:N_CANDIDATOS_RERANK]
+            tecnologias_solicitadas = _tecnologias_solicitadas(consulta)
+            sementes = _buscar_sementes_de_tecnologia(
+                conexao, tecnologias_solicitadas
+            )
+            candidatos = _reservar_cobertura_pre_rerank(fundidos, sementes)
 
             linhas = self._carregar_chunks(conexao, candidatos)
         finally:
@@ -165,10 +233,34 @@ class ConhecimentoNvidia:
             )
 
         # Empate de score preserva a ordem da fusão (posição) e, por fim, o id.
+        chave_rerank = lambda indice: (
+            -scores[indice],
+            indice,
+            linhas[indice]["id"],
+        )
         ordem = sorted(
             range(len(linhas)),
-            key=lambda indice: (-scores[indice], indice, linhas[indice]["id"]),
+            key=chave_rerank,
         )[:N_TRECHOS_FINAL]
+
+        # O reranker continua ordenando todo o lote, mas não pode eliminar do
+        # top final *todas* as tecnologias que a consulta declarou candidatas.
+        # A cobertura reserva um único lugar; ela não cria chunk, tecnologia ou
+        # score e não permite nada que não tenha sido pedido explicitamente.
+        if tecnologias_solicitadas and not any(
+            linhas[indice]["tecnologia"] in tecnologias_solicitadas
+            for indice in ordem
+        ):
+            elegiveis = [
+                indice
+                for indice, linha in enumerate(linhas)
+                if linha["tecnologia"] in tecnologias_solicitadas
+            ]
+            if elegiveis:
+                melhor_elegivel = min(elegiveis, key=chave_rerank)
+                ordem = sorted(
+                    [*ordem[:-1], melhor_elegivel], key=chave_rerank
+                )
 
         trechos = [
             TrechoNvidia(

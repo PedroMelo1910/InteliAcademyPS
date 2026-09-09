@@ -1,6 +1,6 @@
 {
   "descricao": "Conjunto de avaliação da recuperação da KB NVIDIA. Cada caso liga uma consulta em linguagem de diagnóstico à tecnologia cuja fonte curada deveria aparecer no topo. Rótulos atribuídos manualmente a partir da leitura do corpus em conhecimento/fontes/ — nunca derivados da saída do próprio sistema. Amostra pequena: os números orientam iteração, não têm significância estatística.",
-  "metrica": "hit@6 (tecnologia esperada presente no top-6) e posição da primeira ocorrência, antes (fusão RRF) e depois do reranking",
+  "metrica": "hit@6 (tecnologia esperada presente no top-6) e posição da primeira ocorrência, na fusão RRF e no pipeline final com reranking e guarda de cobertura",
   "casos": [
     {"consulta": "startup de call center com custo alto de transcrição de voz em APIs de terceiros", "tecnologia_esperada": "NVIDIA Riva"},
     {"consulta": "empresa que depende só de API externa de LLM e quer auto-hospedar modelos com a mesma interface", "tecnologia_esperada": "NVIDIA NIM"},

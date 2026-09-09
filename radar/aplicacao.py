@@ -1,7 +1,10 @@
+"""Orquestra a descoberta, o ranking e o aprofundamento usados pela interface."""
+
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+import sqlite3
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from uuid import uuid4
@@ -9,23 +12,27 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from radar.agentes.roteadores import rotear_r1
-from radar.base_startups import BaseStartups, inicializar_banco
+from radar.base_startups import BaseStartups, preparar_cache_analises
 from radar.conhecimento_nvidia import ConhecimentoNvidia
 from radar.configuracao import (
     CAMINHO_BANCO,
     CAMINHO_CHECKPOINTS,
-    CAMINHO_DADOS_CURADOS,
     ErroConfiguracao,
     RAIZ_PROJETO,
 )
 from radar.contratos import (
+    AnalisePersistida,
     Briefing,
+    ClasseStartup,
     DocumentoRecuperado,
     EmpresaCandidata,
     EstadoRadar,
+    FitScore,
     PlanoConsulta,
+    PerfilValidado,
     ResultadoR1,
     ResultadoRecuperacao,
+    StatusAnaliseRanking,
 )
 from radar.grafo import montar_grafo
 from radar.provedores import (
@@ -38,6 +45,12 @@ from radar.provedores import (
     ProvedorGeminiPerfilExtraido,
     ProvedorGeminiPlanoConsulta,
     ProvedorGeminiRecomendacaoRascunho,
+    ProvedorGroqBriefingRascunho,
+    ProvedorGroqClassificacao,
+    ProvedorGroqPerfilExtraido,
+    ProvedorGroqPlanoConsulta,
+    ProvedorGroqRecomendacaoRascunho,
+    compor_com_reserva,
     ProvedorPerfilExtraido,
     ProvedorPlanoConsulta,
     ProvedorRecomendacaoRascunho,
@@ -53,6 +66,11 @@ class ItemRanking:
     empresa: EmpresaCandidata
     melhor_score_bm25: float
     documentos: tuple[DocumentoRecuperado, ...]
+    status_analise: StatusAnaliseRanking
+    classe: ClasseStartup | None
+    fit_score_total: int | None
+    justificativa_fit_score: str | None
+    motivo_evidencia_insuficiente: str | None
 
 
 @dataclass(frozen=True)
@@ -67,23 +85,59 @@ class SaidaDescoberta:
     trajeto: tuple[str, ...]
 
 
-def construir_ranking(resultado: ResultadoRecuperacao) -> tuple[ItemRanking, ...]:
+def construir_ranking(
+    resultado: ResultadoRecuperacao,
+    analises: Mapping[int, AnalisePersistida] | None = None,
+) -> tuple[ItemRanking, ...]:
+    """Cruza relevância lexical com o cache, sem misturar as duas medidas."""
+    analises = analises or {}
     documentos_por_empresa: dict[int, list[DocumentoRecuperado]] = {}
     for documento in resultado.documentos:
         documentos_por_empresa.setdefault(documento.id_startup, []).append(documento)
-    ordenadas = sorted(
-        resultado.empresas,
-        key=lambda empresa: min(
+
+    def melhor_bm25(empresa: EmpresaCandidata) -> float:
+        return min(
             (
                 documento.score_bm25
                 for documento in documentos_por_empresa.get(empresa.id_startup, [])
             ),
             default=float("inf"),
-        ),
-    )
+        )
+
+    def chave(empresa: EmpresaCandidata):
+        analise = analises.get(empresa.id_startup)
+        if analise is None:
+            grupo, total = 1, 0
+        elif analise.status == "evidencia_insuficiente":
+            grupo, total = 1, 0
+        else:
+            if analise.fit_score is None:
+                # `assert` sumiria sob python -O e o ranking cairia num
+                # AttributeError obscuro. Uma concluída sem FitScore é um
+                # cache corrompido: falhar alto é melhor do que rebaixá-la em
+                # silêncio ou arbitrar uma pontuação que ninguém calculou.
+                raise ErroAplicacao(
+                    "análise concluída sem FitScore para a startup "
+                    f"{empresa.id_startup}: o ranking não inventa pontuação"
+                )
+            grupo = 0
+            total = analise.fit_score.total
+        return (
+            grupo,
+            -total,
+            melhor_bm25(empresa),
+            empresa.nome.casefold(),
+            empresa.id_startup,
+        )
+
+    ordenadas = sorted(resultado.empresas, key=chave)
     itens: list[ItemRanking] = []
     for posicao, empresa in enumerate(ordenadas, start=1):
         documentos = tuple(documentos_por_empresa.get(empresa.id_startup, []))
+        analise = analises.get(empresa.id_startup)
+        status: StatusAnaliseRanking = (
+            analise.status if analise is not None else "ausente"
+        )
         itens.append(
             ItemRanking(
                 posicao=posicao,
@@ -93,6 +147,23 @@ def construir_ranking(resultado: ResultadoRecuperacao) -> tuple[ItemRanking, ...
                     default=0.0,
                 ),
                 documentos=documentos,
+                status_analise=status,
+                classe=analise.classe if analise is not None else None,
+                fit_score_total=(
+                    analise.fit_score.total
+                    if analise is not None and analise.fit_score is not None
+                    else None
+                ),
+                justificativa_fit_score=(
+                    analise.fit_score.justificativa_curta
+                    if analise is not None and analise.fit_score is not None
+                    else None
+                ),
+                motivo_evidencia_insuficiente=(
+                    analise.motivo_evidencia_insuficiente
+                    if analise is not None
+                    else None
+                ),
             )
         )
     return tuple(itens)
@@ -107,6 +178,8 @@ class SaidaAprofundamento:
     id_startup: int
     trajeto: tuple[str, ...]
     erros: tuple[str, ...]
+    perfil_validado: PerfilValidado | None = None
+    fit_score: FitScore | None = None
 
 
 class ErroAplicacao(RuntimeError):
@@ -114,9 +187,10 @@ class ErroAplicacao(RuntimeError):
 
 
 class AplicacaoRadar:
-    def __init__(self, grafo, conexao_checkpoints):
+    def __init__(self, grafo, conexao_checkpoints, base: BaseStartups):
         self.grafo = grafo
         self._conexao_checkpoints = conexao_checkpoints
+        self.base = base
 
     def executar_descoberta(self, consulta: str) -> SaidaDescoberta:
         estado_inicial: EstadoRadar = {
@@ -137,12 +211,15 @@ class AplicacaoRadar:
         )
         plano = PlanoConsulta.model_validate(estado_final["plano_consulta"])
         rota = rotear_r1(estado_final)
+        analises = self.base.carregar_analises(
+            [empresa.id_startup for empresa in resultado.empresas]
+        )
         return SaidaDescoberta(
             consulta=consulta,
             rota=rota,
             plano=plano,
             resultado=resultado,
-            ranking=construir_ranking(resultado),
+            ranking=construir_ranking(resultado, analises),
             tentativas_relaxamento=int(estado_final.get("tentativas_relaxamento", 0)),
             criterios_relaxados=tuple(estado_final.get("criterios_relaxados", [])),
             trajeto=tuple(estado_final.get("trajeto", [])),
@@ -188,12 +265,27 @@ class AplicacaoRadar:
                 "o grafo terminou sem briefing para a startup "
                 f"{id_startup}; nenhum resultado parcial é exposto"
             )
+        briefing = Briefing.model_validate(bruto)
+        perfil_bruto = estado_final.get("perfil_validado")
+        fit_bruto = estado_final.get("fit_score")
+        perfil = (
+            PerfilValidado.model_validate(perfil_bruto)
+            if perfil_bruto is not None
+            else None
+        )
+        fit_score = (
+            FitScore.model_validate(fit_bruto)
+            if fit_bruto is not None
+            else None
+        )
         return SaidaAprofundamento(
-            briefing=Briefing.model_validate(bruto),
+            briefing=briefing,
             plano=PlanoConsulta.model_validate(estado_final["plano_consulta"]),
             id_startup=id_startup,
             trajeto=tuple(estado_final.get("trajeto", [])),
             erros=tuple(estado_final.get("erros", [])),
+            perfil_validado=perfil,
+            fit_score=fit_score,
         )
 
 
@@ -208,7 +300,20 @@ def criar_aplicacao(
     provedor_briefing: ProvedorBriefingRascunho | None = None,
     relogio: Callable[[], date] | None = None,
 ) -> AplicacaoRadar:
-    inicializar_banco(caminho_banco, CAMINHO_DADOS_CURADOS)
+    # A base curada é estática em execução (§4.2) e ``aplicacao`` só orquestra
+    # e exibe (§9.1): abrir a tela lê o banco, nunca o reconstrói. Semear aqui
+    # refazia o upsert das startups e dos documentos e reconstruía o índice FTS
+    # a cada boot do Streamlit — escrita no caminho de leitura, capaz de
+    # colidir com um lote em andamento. O seed pertence ao comando explícito.
+    if not caminho_banco.exists():
+        raise ErroConfiguracao(
+            "dados/radar.db não existe; execute primeiro "
+            "python -m scripts.inicializar_base"
+        )
+    try:
+        preparar_cache_analises(caminho_banco)
+    except (sqlite3.DatabaseError, ValueError) as erro:
+        raise ErroConfiguracao(str(erro)) from erro
     injetados = (
         provedor,
         provedor_extracao,
@@ -240,9 +345,34 @@ def criar_aplicacao(
                 "O caminho aderente consulta a base de conhecimento NVIDIA; "
                 "adicione a chave e reinicie a aplicação."
             )
-        provedor = ProvedorGeminiPlanoConsulta(api_key)
-        provedor_extracao = ProvedorGeminiPerfilExtraido(api_key)
-        provedor_classificacao = ProvedorGeminiClassificacao(api_key)
+        # Gemini é o primário. A reserva Groq só entra quando GROQ_API_KEY
+        # existe; sem ela, `compor_com_reserva` devolve o próprio provedor
+        # Gemini e o comportamento fica idêntico ao de hoje.
+        chave_reserva = os.getenv("GROQ_API_KEY", "").strip()
+
+        def com_reserva(primario, fabrica, fronteira):
+            return compor_com_reserva(
+                primario,
+                fabrica,
+                fronteira=fronteira,
+                chave_reserva=chave_reserva,
+            )
+
+        provedor = com_reserva(
+            ProvedorGeminiPlanoConsulta(api_key),
+            ProvedorGroqPlanoConsulta,
+            "query_planner",
+        )
+        provedor_extracao = com_reserva(
+            ProvedorGeminiPerfilExtraido(api_key),
+            ProvedorGroqPerfilExtraido,
+            "extractor",
+        )
+        provedor_classificacao = com_reserva(
+            ProvedorGeminiClassificacao(api_key),
+            ProvedorGroqClassificacao,
+            "classifier",
+        )
         # A composição de reranking aprovada no Entregável 2 é reusada como
         # está: NVIDIA primário e fallback listwise no backbone LLM.
         consultor_nvidia = ConhecimentoNvidia(
@@ -253,8 +383,16 @@ def criar_aplicacao(
                 ProvedorRerankListwiseGemini(api_key),
             ),
         )
-        provedor_recomendacao = ProvedorGeminiRecomendacaoRascunho(api_key)
-        provedor_briefing = ProvedorGeminiBriefingRascunho(api_key)
+        provedor_recomendacao = com_reserva(
+            ProvedorGeminiRecomendacaoRascunho(api_key),
+            ProvedorGroqRecomendacaoRascunho,
+            "recommendation",
+        )
+        provedor_briefing = com_reserva(
+            ProvedorGeminiBriefingRascunho(api_key),
+            ProvedorGroqBriefingRascunho,
+            "briefing",
+        )
     assert (
         provedor is not None
         and provedor_extracao is not None
@@ -263,8 +401,9 @@ def criar_aplicacao(
         and provedor_recomendacao is not None
         and provedor_briefing is not None
     )
+    base = BaseStartups(caminho_banco)
     grafo, conexao = montar_grafo(
-        BaseStartups(caminho_banco),
+        base,
         provedor,
         provedor_extracao,
         provedor_classificacao,
@@ -274,4 +413,4 @@ def criar_aplicacao(
         provedor_briefing,
         relogio,
     )
-    return AplicacaoRadar(grafo, conexao)
+    return AplicacaoRadar(grafo, conexao, base)

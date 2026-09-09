@@ -1,3 +1,5 @@
+"""Testa a rubrica determinística e as travas do fit-score NVIDIA."""
+
 from __future__ import annotations
 
 from datetime import date

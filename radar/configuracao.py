@@ -1,3 +1,5 @@
+"""Reúne caminhos, modelos e limites operacionais explícitos do projeto."""
+
 from pathlib import Path
 
 
@@ -11,8 +13,23 @@ CAMINHO_BANCO = RAIZ_PROJETO / "dados" / "radar.db"
 CAMINHO_CHECKPOINTS = RAIZ_PROJETO / "dados" / "checkpoints.db"
 
 MODELO_GEMINI = "gemini-3.5-flash-lite"
+
+# Reserva operacional opcional. O Groq só entra quando o Gemini falha por
+# indisponibilidade; ele nunca relaxa contrato nem regra de evidência.
+MODELO_GROQ = "openai/gpt-oss-120b"
+# Conservador de propósito: uma queda do Gemini não pode virar enxurrada na
+# reserva nem estourar o limite do provedor.
+# ~3 requisições por minuto: o prompt do Extractor carrega vários documentos,
+# então o limite que aperta primeiro é o de tokens por minuto, não o de
+# requisições.
+REQUISICOES_GROQ_POR_SEGUNDO = 0.05
 TETO_DOCUMENTOS_DESCOBERTA = 20
 TETO_RELAXAMENTO = 2
+# Tamanho mínimo de um ranking que responde "quem eu ligo primeiro". Abaixo
+# disso a descoberta é estreita demais para comparar e R1 prefere gastar um
+# degrau da escada de relaxamento a devolver um nome só. Não é piso de
+# entrega: depois do teto, o parcial válido é entregue como está.
+MINIMO_CANDIDATAS_UTEIS = 3
 LIMIAR_DERRUBADA = 0.5
 MAX_EXTRACOES = 2
 

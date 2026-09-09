@@ -19,6 +19,7 @@ from radar.contratos import (
     TECNOLOGIAS_NVIDIA,
     ComplexidadeRecomendacao,
     GapEnderecado,
+    SinalTecnicoNvidia,
     PerfilValidado,
     PrioridadeRecomendacao,
     TecnologiaNvidia,
@@ -32,6 +33,7 @@ from radar.recomendacao import _pontos_estagio
 
 
 GAPS_ENDERECAVEIS: tuple[str, ...] = get_args(GapEnderecado)
+SINAIS_TECNICOS: tuple[str, ...] = get_args(SinalTecnicoNvidia)
 COMPLEXIDADES_RECOMENDACAO: tuple[str, ...] = get_args(ComplexidadeRecomendacao)
 
 # A escada é declarada aqui, e não inferida da ordem do ``Literal``: o ajuste
@@ -100,6 +102,10 @@ TECNOLOGIAS_POR_GAP: dict[GapEnderecado, tuple[TecnologiaNvidia, ...]] = {
         "NeMo Guardrails",
         "NVIDIA Triton Inference Server",
         "NVIDIA NeMo",
+        # A dependência pode ser uma API de voz, não apenas de LLM. A Riva só
+        # se torna elegível quando a recuperação NVIDIA também traz um chunk
+        # dela, preservando o lastro dos dois lados.
+        "NVIDIA Riva",
         "NVIDIA AI Enterprise",
     ),
     "escala_e_dor_operacional": (
@@ -140,14 +146,60 @@ COMPLEXIDADE_POR_TECNOLOGIA: dict[TecnologiaNvidia, ComplexidadeRecomendacao] = 
 }
 
 
-def tecnologias_candidatas(gap: str) -> tuple[TecnologiaNvidia, ...]:
-    """Conjunto permitido para o gap; recusa gap fora do enum do contrato."""
+# ----------------------------------------------------------------------
+# §10.1b — tabela fixa sinal técnico → tecnologias candidatas
+# ----------------------------------------------------------------------
+#
+# Conservadora de propósito: cada conjunto só contém tecnologia que o TAPI
+# §5.5 associa àquela carga de trabalho. O sinal não é deficiência — é
+# capacidade observada que a stack NVIDIA acelera.
+TECNOLOGIAS_POR_SINAL: dict[str, tuple[TecnologiaNvidia, ...]] = {
+    "inferencia_llm": (
+        "NVIDIA NIM",
+        "NVIDIA Triton Inference Server",
+        "TensorRT-LLM",
+        "NVIDIA AI Enterprise",
+    ),
+    "treinamento_ou_finetuning": ("NVIDIA NeMo", "CUDA", "NVIDIA AI Enterprise"),
+    "voz_fala_ou_transcricao": ("NVIDIA Riva", "NVIDIA NIM"),
+    "dados_em_escala": ("NVIDIA RAPIDS", "cuDF", "NVIDIA AI Enterprise"),
+    "machine_learning_classico": ("cuML", "NVIDIA RAPIDS", "cuDF"),
+    "visao_computacional": (
+        "CUDA",
+        "NVIDIA Triton Inference Server",
+        "NVIDIA NIM",
+        "NVIDIA AI Enterprise",
+    ),
+    "robotica_ou_simulacao": ("NVIDIA Isaac", "NVIDIA Omniverse", "CUDA"),
+    "imagem_medica": ("NVIDIA Clara", "NVIDIA NIM", "NVIDIA AI Enterprise"),
+    "agentes_com_acoes_ou_controles": (
+        "NeMo Guardrails",
+        "NVIDIA NeMo",
+        "NVIDIA NIM",
+    ),
+    "ciberseguranca_em_escala": ("NVIDIA Morpheus", "NVIDIA AI Enterprise"),
+}
+
+
+def tecnologias_candidatas(
+    tipo_fundamento: str, identificador: str
+) -> tuple[TecnologiaNvidia, ...]:
+    """Conjunto permitido para o fundamento; recusa identificador de outro domínio."""
+    tabela = (
+        TECNOLOGIAS_POR_GAP
+        if tipo_fundamento == "gap_confirmado"
+        else TECNOLOGIAS_POR_SINAL
+    )
+    if tipo_fundamento not in ("gap_confirmado", "oportunidade_confirmada"):
+        raise ErroRegraRecomendacao(
+            f"tipo de fundamento desconhecido: {tipo_fundamento!r}"
+        )
     try:
-        return TECNOLOGIAS_POR_GAP[gap]  # type: ignore[index]
+        return tabela[identificador]  # type: ignore[index]
     except KeyError as erro:
         raise ErroRegraRecomendacao(
-            f"gap {gap!r} não pertence ao enum de gaps endereçáveis: "
-            f"{list(GAPS_ENDERECAVEIS)}"
+            f"{identificador!r} não pertence ao domínio de {tipo_fundamento!r}; "
+            f"permitidos: {sorted(tabela)}"
         ) from erro
 
 
@@ -188,29 +240,65 @@ def gaps_sustentados(perfil: PerfilValidado) -> dict[GapEnderecado, frozenset[in
     return sustentados
 
 
-def conferir_gap_sustentado(
-    gap: str,
-    ids_citados: Iterable[int],
-    sustentados: dict[GapEnderecado, frozenset[int]],
-) -> None:
-    """Liga a evidência citada ao gap escolhido; sem esse elo não há proveniência.
+def sinais_sustentados(perfil: PerfilValidado) -> dict[str, frozenset[int]]:
+    """Sinais técnicos que a evidência **confirmada** carrega, com seus ids.
 
-    Conferir separadamente que a tecnologia pertence ao gap e que cada id é de
-    uma afirmação confirmada não basta: as duas conferências passam mesmo quando
-    a afirmação citada não diz nada sobre aquele gap. É este elo que impede uma
-    recomendação de tomar emprestada a proveniência de uma evidência alheia.
+    Só olha afirmação confirmada: uma afirmação derrubada perde junto qualquer
+    sinal que carregava. Não olha setor, nome da empresa nem ausência de
+    informação — o sinal viaja dentro da própria afirmação, ao lado do trecho
+    literal que a sustenta. A ordem segue o enum, para que duas execuções
+    iguais produzam o mesmo prompt.
     """
-    ids_do_gap = sustentados.get(gap)  # type: ignore[arg-type]
-    if not ids_do_gap:
+    ids_por_sinal: dict[str, set[int]] = {}
+    for item in perfil.afirmacoes_validadas:
+        if item.situacao != "confirmada":
+            continue
+        for sinal in item.sinais_tecnicos:
+            ids_por_sinal.setdefault(sinal, set()).add(item.id_afirmacao)
+    return {
+        sinal: frozenset(ids_por_sinal[sinal])
+        for sinal in SINAIS_TECNICOS
+        if sinal in ids_por_sinal
+    }
+
+
+def fundamentos_disponiveis(
+    perfil: PerfilValidado,
+) -> dict[tuple[str, str], frozenset[int]]:
+    """Tudo que a evidência confirmada autoriza recomendar, com o tipo explícito.
+
+    Gap e dor mantêm exatamente a regra anterior; o sinal técnico entra como
+    segundo tipo de fundamento. Os dois domínios de identificador são
+    disjuntos, então o par (tipo, identificador) é inequívoco.
+    """
+    fundamentos: dict[tuple[str, str], frozenset[int]] = {}
+    for gap, ids in gaps_sustentados(perfil).items():
+        fundamentos[("gap_confirmado", gap)] = ids
+    for sinal, ids in sinais_sustentados(perfil).items():
+        fundamentos[("oportunidade_confirmada", sinal)] = ids
+    return fundamentos
+
+
+def conferir_fundamento_sustentado(
+    tipo_fundamento: str,
+    identificador: str,
+    ids_citados: Iterable[int],
+    fundamentos: dict[tuple[str, str], frozenset[int]],
+) -> None:
+    """Liga a evidência citada ao fundamento escolhido, gap ou oportunidade."""
+    ids_do_fundamento = fundamentos.get((tipo_fundamento, identificador))
+    if not ids_do_fundamento:
         raise ErroRegraRecomendacao(
-            f"o gap {gap!r} não está sustentado por evidência confirmada neste "
-            f"perfil; gaps sustentados: {sorted(sustentados)}"
+            f"o fundamento {tipo_fundamento}/{identificador!r} não está "
+            "sustentado por evidência confirmada neste perfil; disponíveis: "
+            f"{sorted(fundamentos)}"
         )
     citados = set(ids_citados)
-    if not citados & ids_do_gap:
+    if not citados & ids_do_fundamento:
         raise ErroRegraRecomendacao(
-            f"as afirmações {sorted(citados)} não sustentam o gap {gap!r}; "
-            f"sustentam-no apenas {sorted(ids_do_gap)}"
+            f"as afirmações {sorted(citados)} não sustentam o fundamento "
+            f"{tipo_fundamento}/{identificador!r}; sustentam-no apenas "
+            f"{sorted(ids_do_fundamento)}"
         )
 
 
@@ -235,10 +323,10 @@ def calcular_prioridade(
         return "alta" if estagio_na_janela_de_inflexao(estagio) else "media"
     if gap_confirmado:
         return "media"
-    # `baixa` pertence à regra pura (§10.2), mas o nó normal não a alcança: ele
-    # só recomenda gap sustentado, e a linha "Média" do §10.2 já cobre gap
-    # confirmado sem dor. O nível fica reservado a recomendação de
-    # aperfeiçoamento sem gap sustentado, que este marco não produz.
+    # `baixa` é o nível de uma **oportunidade confirmada** sem dor citada: a
+    # carga de trabalho existe e a stack NVIDIA a acelera, mas nada na evidência
+    # indica urgência. Inflar isso para "média" seria fingir dor que a fonte
+    # não documenta.
     return "baixa"
 
 

@@ -1,3 +1,5 @@
+"""Define os contratos Pydantic e o estado tipado compartilhado pelo grafo."""
+
 from __future__ import annotations
 
 import math
@@ -22,6 +24,8 @@ TipoDocumento = Literal[
 ResultadoR1 = Literal["analisar", "candidatas_prontas", "relaxar", "sem_resultado"]
 ResultadoR2 = Literal["reextrair", "evidencia_pronta"]
 ResultadoR3 = Literal["evidencia_insuficiente", "nao_aderente", "prosseguir"]
+StatusAnalise = Literal["concluida", "evidencia_insuficiente"]
+StatusAnaliseRanking = Literal["concluida", "evidencia_insuficiente", "ausente"]
 
 CategoriaAfirmacao = Literal[
     "dados_proprietarios",
@@ -68,6 +72,32 @@ GapEnderecado = Literal[
     "dependencia_api_externa",
     "escala_e_dor_operacional",
 ]
+
+# Cargas de trabalho que o TAPI §5.5 endereça a partir de capacidade
+# positivamente observada, não de deficiência. Um sinal é interpretação do
+# Extractor com proveniência literal confirmada — não prova de verdade
+# objetiva. Setor contextualiza; nunca cria.
+SinalTecnicoNvidia = Literal[
+    "inferencia_llm",
+    "treinamento_ou_finetuning",
+    "voz_fala_ou_transcricao",
+    "dados_em_escala",
+    "machine_learning_classico",
+    "visao_computacional",
+    "robotica_ou_simulacao",
+    "imagem_medica",
+    "agentes_com_acoes_ou_controles",
+    "ciberseguranca_em_escala",
+]
+
+SINAIS_TECNICOS: tuple[str, ...] = get_args(SinalTecnicoNvidia)
+GAPS_ENDERECAVEIS: tuple[str, ...] = get_args(GapEnderecado)
+
+# Os dois domínios são disjuntos por construção: é isso que torna o par
+# discriminado inequívoco sem checagem extra.
+TipoFundamento = Literal["gap_confirmado", "oportunidade_confirmada"]
+
+IdentificadorFundamento = GapEnderecado | SinalTecnicoNvidia
 
 TipoAcao = Literal[
     "convite_inception",
@@ -269,6 +299,9 @@ class Afirmacao(BaseModel):
         min_length=MINIMO_CARACTERES_TRECHO_CITADO,
         max_length=LIMITE_TRECHO_CITADO,
     )
+    # Zero sinais é sempre válido e preferível a inferir. O default vazio
+    # mantém compatível todo estado serializado antes deste marco.
+    sinais_tecnicos: tuple[SinalTecnicoNvidia, ...] = ()
 
     @field_validator("texto", "trecho_citado")
     @classmethod
@@ -297,6 +330,25 @@ class Afirmacao(BaseModel):
                 f"{MINIMO_PALAVRAS_TRECHO_CITADO} palavras"
             )
         return valor
+
+    @field_validator("sinais_tecnicos")
+    @classmethod
+    def sinais_unicos_em_ordem_canonica(
+        cls, valores: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        if len(set(valores)) != len(valores):
+            raise ValueError("sinais_tecnicos não pode repetir o mesmo sinal")
+        return tuple(sorted(valores, key=SINAIS_TECNICOS.index))
+
+    @model_validator(mode="after")
+    def ausencia_declarada_nao_carrega_sinal(self) -> Afirmacao:
+        """Carga de trabalho não se prova por ausência declarada."""
+        if self.polaridade == "ausencia_explicita" and self.sinais_tecnicos:
+            raise ValueError(
+                "uma afirmação com polaridade ausencia_explicita não pode "
+                "carregar sinal técnico: o que está declarado é a falta"
+            )
+        return self
 
     @model_validator(mode="after")
     def polaridade_compativel_com_categoria(self) -> Afirmacao:
@@ -673,6 +725,26 @@ class ContextoNvidia(BaseModel):
     trechos: list[TrechoNvidia] = Field(min_length=5, max_length=8)
 
 
+def _conferir_dominio_do_fundamento(modelo):
+    """Um gap exige tipo de gap; um sinal exige tipo de oportunidade.
+
+    Os dois domínios são disjuntos, então a checagem é uma pertinência simples
+    — e é ela que impede descrever carga de trabalho observada como lacuna.
+    """
+    permitidos = (
+        GAPS_ENDERECAVEIS
+        if modelo.tipo_fundamento == "gap_confirmado"
+        else SINAIS_TECNICOS
+    )
+    if modelo.identificador_fundamento not in permitidos:
+        raise ValueError(
+            f"identificador_fundamento {modelo.identificador_fundamento!r} não "
+            f"pertence ao tipo {modelo.tipo_fundamento!r}; permitidos: "
+            f"{list(permitidos)}"
+        )
+    return modelo
+
+
 class ProximaAcao(BaseModel):
     """Ação operacional escolhida pelo LLM dentro de um catálogo fechado."""
 
@@ -696,13 +768,18 @@ class RecomendacaoRascunho(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    gap_enderecado: GapEnderecado
+    tipo_fundamento: TipoFundamento
+    identificador_fundamento: IdentificadorFundamento
     tecnologias: list[TecnologiaNvidia] = Field(min_length=1, max_length=3)
     justificativa_tecnica: str = Field(min_length=1)
     justificativa_negocio: str = Field(min_length=1)
     proxima_acao: ProximaAcao
     ids_afirmacoes: list[int] = Field(min_length=1)
     ids_chunks: list[int] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def identificador_pertence_ao_tipo(self) -> RecomendacaoRascunho:
+        return _conferir_dominio_do_fundamento(self)
 
     @field_validator("justificativa_tecnica", "justificativa_negocio")
     @classmethod
@@ -750,11 +827,17 @@ class CitacaoNvidia(ItemCorpusNvidia):
 
 
 class Recomendacao(BaseModel):
-    """Pacote por gap com proveniência obrigatória nos dois lados."""
+    """Pacote por fundamento, com proveniência obrigatória nos dois lados.
+
+    O fundamento é um gap confirmado **ou** uma oportunidade técnica
+    confirmada; oportunidade nunca é descrita como deficiência. Cada
+    tecnologia recomendada exige citação NVIDIA da própria tecnologia.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    gap_enderecado: GapEnderecado
+    tipo_fundamento: TipoFundamento
+    identificador_fundamento: IdentificadorFundamento
     tecnologias: list[TecnologiaNvidia] = Field(min_length=1, max_length=3)
     justificativa_tecnica: str = Field(min_length=1)
     justificativa_negocio: str = Field(min_length=1)
@@ -779,6 +862,10 @@ class Recomendacao(BaseModel):
         return valores
 
     @model_validator(mode="after")
+    def identificador_pertence_ao_tipo(self) -> Recomendacao:
+        return _conferir_dominio_do_fundamento(self)
+
+    @model_validator(mode="after")
     def proveniencia_e_unica_e_inclui_tecnologia(self) -> Recomendacao:
         ids_afirmacoes = [item.id_afirmacao for item in self.evidencias_startup]
         if len(set(ids_afirmacoes)) != len(ids_afirmacoes):
@@ -795,6 +882,25 @@ class Recomendacao(BaseModel):
             raise ValueError(
                 "ao menos uma citação NVIDIA precisa vir de um chunk de tecnologia"
             )
+
+        # Um chunk de tecnologia de OUTRO produto não sustenta a tecnologia
+        # recomendada: a proveniência formal fecharia e o lastro real não
+        # existiria. Chunk conceitual segue valendo como contexto adicional.
+        com_lastro = {
+            item.tecnologia
+            for item in self.citacoes_nvidia
+            if item.origem == "tecnologia" and item.tecnologia is not None
+        }
+        sem_lastro = [
+            tecnologia
+            for tecnologia in self.tecnologias
+            if tecnologia not in com_lastro
+        ]
+        if sem_lastro:
+            raise ValueError(
+                "cada tecnologia recomendada exige uma citação NVIDIA da própria "
+                f"tecnologia; sem lastro: {sem_lastro}; citadas: {sorted(com_lastro)}"
+            )
         return self
 
 
@@ -807,7 +913,7 @@ class RelatorioRecomendacoes(BaseModel):
 
     @model_validator(mode="after")
     def cada_gap_entra_uma_unica_vez(self) -> RelatorioRecomendacoes:
-        """Defesa em profundidade da §6.1: um pacote coeso **por gap**.
+        """Defesa em profundidade da §6.1: um pacote coeso **por fundamento**.
 
         O nó já descarta a duplicata antes do retry; esta guarda garante que
         nenhum outro caminho de construção monte um relatório com o mesmo gap
@@ -815,12 +921,17 @@ class RelatorioRecomendacoes(BaseModel):
         mesmo gap são duas respostas concorrentes, e escolher uma é decisão do
         nó, não do contrato.
         """
-        gaps = [item.gap_enderecado for item in self.recomendacoes]
-        repetidos = sorted({gap for gap in gaps if gaps.count(gap) > 1})
+        fundamentos = [
+            (item.tipo_fundamento, item.identificador_fundamento)
+            for item in self.recomendacoes
+        ]
+        repetidos = sorted(
+            {item for item in fundamentos if fundamentos.count(item) > 1}
+        )
         if repetidos:
             raise ValueError(
                 "o relatório não pode trazer mais de uma recomendação para o "
-                f"mesmo gap; repetidos: {repetidos}"
+                f"mesmo fundamento; repetidos: {repetidos}"
             )
         return self
 
@@ -996,6 +1107,103 @@ class FitScore(BaseModel):
                 raise ValueError(
                     f"total {self.total} não corresponde à normalização {esperado}"
                 )
+        return self
+
+
+class AnalisePersistida(BaseModel):
+    """Resultado regenerável do grafo de lote, validado antes de tocar o SQLite."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    startup_id: int = Field(ge=1)
+    status: StatusAnalise
+    classe: ClasseStartup | None = None
+    fit_score: FitScore | None = None
+    perfil_validado: PerfilValidado
+    motivo_evidencia_insuficiente: str | None = Field(
+        default=None, min_length=1, max_length=500
+    )
+    data_execucao: date
+    versao_rubrica: Literal["rubrica-v1"]
+
+    @model_validator(mode="after")
+    def campos_correspondem_ao_status(self) -> AnalisePersistida:
+        if self.status == "concluida":
+            if self.classe is None or self.fit_score is None:
+                raise ValueError(
+                    "análise concluída exige classe e FitScore completos"
+                )
+            if self.motivo_evidencia_insuficiente is not None:
+                raise ValueError(
+                    "análise concluída não pode carregar motivo de insuficiência"
+                )
+            if self.fit_score.versao_rubrica != self.versao_rubrica:
+                raise ValueError(
+                    "FitScore e análise precisam usar a mesma versão da rubrica"
+                )
+            if (
+                self.fit_score.estado_dimensoes_gap
+                != self.perfil_validado.estado_dimensoes_gap
+            ):
+                raise ValueError(
+                    "FitScore precisa preservar os estados de gap do perfil validado"
+                )
+            ids_confirmados = {
+                item.id_afirmacao
+                for item in self.perfil_validado.afirmacoes_validadas
+                if item.situacao == "confirmada"
+            }
+            ids_do_score = {
+                id_afirmacao
+                for pilar in self.fit_score.pilares
+                for id_afirmacao in pilar.ids_evidencias
+            }
+            if not ids_do_score.issubset(ids_confirmados):
+                raise ValueError(
+                    "FitScore só pode referenciar afirmações confirmadas do perfil"
+                )
+            gate_non_ai = all(
+                "gate_non_ai" in pilar.travas_aplicadas
+                for pilar in self.fit_score.pilares
+            )
+            if self.classe == "non-AI" and (
+                self.fit_score.total != 0 or not gate_non_ai
+            ):
+                raise ValueError(
+                    "classe non-AI exige FitScore zero com gate_non_ai nos pilares"
+                )
+            if self.classe != "non-AI" and gate_non_ai:
+                raise ValueError("gate_non_ai só pode acompanhar a classe non-AI")
+            return self
+
+        if self.classe is not None or self.fit_score is not None:
+            raise ValueError(
+                "evidência insuficiente exige classe e FitScore nulos"
+            )
+        if not (self.motivo_evidencia_insuficiente or "").strip():
+            raise ValueError(
+                "evidência insuficiente exige um motivo explícito"
+            )
+        return self
+
+
+class CoberturaAnalises(BaseModel):
+    """Contagem consistente do cache em relação às startups curadas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_startups: int = Field(ge=0)
+    concluidas: int = Field(ge=0)
+    evidencias_insuficientes: int = Field(ge=0)
+    ausentes: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def parcelas_fecham_o_total(self) -> CoberturaAnalises:
+        if (
+            self.concluidas + self.evidencias_insuficientes + self.ausentes
+            != self.total_startups
+        ):
+            raise ValueError("as parcelas de cobertura não fecham o total")
         return self
 
 
@@ -1214,12 +1422,17 @@ class Briefing(BaseModel):
 
     @model_validator(mode="after")
     def cada_gap_aparece_uma_unica_vez(self) -> Briefing:
-        gaps = [item.gap_enderecado for item in self.recomendacoes]
-        repetidos = sorted({gap for gap in gaps if gaps.count(gap) > 1})
+        fundamentos = [
+            (item.tipo_fundamento, item.identificador_fundamento)
+            for item in self.recomendacoes
+        ]
+        repetidos = sorted(
+            {item for item in fundamentos if fundamentos.count(item) > 1}
+        )
         if repetidos:
             raise ValueError(
                 "o briefing não pode embutir duas recomendações para o mesmo "
-                f"gap; repetidos: {repetidos}"
+                f"fundamento; repetidos: {repetidos}"
             )
         return self
 

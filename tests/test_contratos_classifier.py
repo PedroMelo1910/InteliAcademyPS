@@ -1,3 +1,5 @@
+"""Testa as invariantes Pydantic usadas pelo Classifier."""
+
 import pytest
 from pydantic import ValidationError
 
