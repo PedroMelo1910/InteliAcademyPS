@@ -1,8 +1,9 @@
 """Interface final do NVIDIA Startup AI Radar (Entregável 4).
 
 A tela só orquestra e exibe: toda decisão veio pronta da fronteira da
-aplicação (`executar_descoberta` e `executar_aprofundamento`). Aqui não se
-ordena ranking, não se recalcula fit-score e não se remonta payload de grafo.
+aplicação (`executar_descoberta` e `executar_aprofundamento`). Os controles
+pedem à aplicação apenas para reordenar ou filtrar medidas já calculadas;
+aqui não se recalcula fit-score e não se remonta payload de grafo.
 O que sobrevive entre reruns está em `radar.interface.estado`; o que o usuário
 lê está em `radar.interface.rotulos` e `radar.interface.mensagens`; o que ele
 baixa está em `radar.interface.exportacao` — o mesmo conteúdo da tela.
@@ -20,7 +21,7 @@ from collections import Counter
 import streamlit as st
 
 from radar.agentes.query_planner import ErroQueryPlanner
-from radar.aplicacao import criar_aplicacao
+from radar.aplicacao import criar_aplicacao, personalizar_ranking
 from radar.base_startups import BaseStartups
 from radar.configuracao import CAMINHO_BANCO, ErroConfiguracao
 from radar.interface import estado as sessao
@@ -251,14 +252,53 @@ def renderizar_ranking(descoberta) -> None:
             + ", ".join(texto_legivel(item) for item in descoberta.criterios_relaxados)
             + "."
         )
-    ranking = sessao.ranking_visivel(st.session_state)
-    if not ranking:
+    ranking_completo = sessao.ranking_visivel(st.session_state)
+    if not ranking_completo:
         st.warning(mensagens.SEM_RESULTADO)
         st.caption(mensagens.SEM_RESULTADO_SAIDA)
         return
 
     st.subheader(mensagens.TITULO_RANKING)
     st.caption(mensagens.LEGENDA_RANKING)
+
+    coluna_ordem, coluna_classe = st.columns(2)
+    with coluna_ordem:
+        rotulo_ordem = st.selectbox(
+            mensagens.ROTULO_ORDENACAO,
+            (
+                mensagens.OPCAO_ORDENAR_FIT_SCORE,
+                mensagens.OPCAO_ORDENAR_RELEVANCIA,
+            ),
+            key="ordenacao_ranking",
+        )
+    with coluna_classe:
+        rotulo_classe = st.selectbox(
+            mensagens.ROTULO_FILTRO_CLASSE,
+            (
+                mensagens.OPCAO_TODAS_CLASSES,
+                "AI-native",
+                "AI-enabled",
+                "non-AI",
+            ),
+            key="filtro_classe_ranking",
+        )
+
+    criterio = (
+        "fit_score"
+        if rotulo_ordem == mensagens.OPCAO_ORDENAR_FIT_SCORE
+        else "relevancia"
+    )
+    classe = None if rotulo_classe == mensagens.OPCAO_TODAS_CLASSES else rotulo_classe
+    ranking = personalizar_ranking(
+        ranking_completo,
+        criterio=criterio,
+        classe=classe,
+        consulta=descoberta.consulta,
+    )
+    if not ranking:
+        st.info(mensagens.SEM_RESULTADO_NO_FILTRO)
+        return
+
     for resumo, item in zip(resumir_ranking(ranking), ranking, strict=True):
         renderizar_candidata(resumo, item)
 

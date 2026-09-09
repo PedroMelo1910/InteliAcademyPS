@@ -2,8 +2,8 @@
 
 Estes testes não olham pixel. Eles olham as promessas que a redação da tela faz
 ao avaliador: a abertura diz o que o produto é, os exemplos preenchem sem
-executar, as duas medidas continuam separadas, a ordem e os números vêm prontos
-da aplicação, a volta não refaz trabalho, os seis desfechos continuam
+executar, as duas medidas continuam separadas, os controles pedem uma nova
+ordenação à aplicação, a volta não refaz trabalho, os seis desfechos continuam
 renderizáveis e o único HTML bruto da aplicação é uma folha de estilo literal.
 """
 
@@ -140,8 +140,7 @@ def test_o_ranking_mostra_fit_score_sem_expor_o_indice_textual():
     assert "índice textual" not in tela
 
 
-def test_a_ordem_e_os_numeros_do_ranking_vem_prontos_da_aplicacao():
-    """Pontuações fora de ordem provam que a tela não reordena nem renormaliza."""
+def test_a_opcao_padrao_prioriza_fit_score_sem_renormalizar():
     itens = (
         item_falso(1, 11, "Baixa", fit_score_total=12),
         item_falso(2, 12, "Alta", fit_score_total=95),
@@ -151,9 +150,38 @@ def test_a_ordem_e_os_numeros_do_ranking_vem_prontos_da_aplicacao():
 
     tela = textos(teste)
 
-    assert tela.index("Baixa") < tela.index("Alta") < tela.index("Media")
+    assert tela.index("Alta") < tela.index("Media") < tela.index("Baixa")
     for pontuacao in ("12/100", "95/100", "40/100"):
         assert pontuacao in tela
+
+
+def test_o_usuario_pode_ordenar_pela_relacao_com_a_busca():
+    itens = (
+        item_falso(1, 11, "Baixa", fit_score_total=12),
+        item_falso(2, 12, "Alta", fit_score_total=95),
+        item_falso(3, 13, "Media", fit_score_total=40),
+    )
+    teste = abrir_ranking(AplicacaoFalsa(descoberta=descoberta_falsa(itens=itens)))
+
+    teste = teste.selectbox(key="ordenacao_ranking").select(
+        mensagens.OPCAO_ORDENAR_RELEVANCIA
+    ).run()
+    tela = textos(teste)
+
+    assert tela.index("Media") < tela.index("Alta") < tela.index("Baixa")
+    assert "BM25" not in tela
+
+
+def test_o_usuario_pode_filtrar_por_classe_sem_nova_busca():
+    aplicacao = AplicacaoFalsa()
+    teste = abrir_ranking(aplicacao)
+
+    teste = teste.selectbox(key="filtro_classe_ranking").select("non-AI").run()
+    tela = textos(teste)
+
+    assert "Wine" in tela
+    assert "Maritaca AI" not in tela
+    assert aplicacao.consultas == [CONSULTA_PADRAO]
 
 
 def test_o_gate_non_ai_aparece_como_zero_deliberado_e_nao_como_erro():

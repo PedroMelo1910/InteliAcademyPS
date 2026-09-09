@@ -64,9 +64,14 @@ EXPLICACAO_FIT_SCORE = (
 
 TITULO_RANKING = "Candidatas priorizadas"
 LEGENDA_RANKING = (
-    "Empresas priorizadas pelo fit-score NVIDIA comprovado e pela relação "
-    "com a sua busca."
+    "Escolha se a lista deve priorizar o fit-score NVIDIA ou a relação com a busca."
 )
+ROTULO_ORDENACAO = "Ordenar por"
+OPCAO_ORDENAR_FIT_SCORE = "Maior fit-score NVIDIA"
+OPCAO_ORDENAR_RELEVANCIA = "Maior relação com a busca"
+ROTULO_FILTRO_CLASSE = "Filtrar perfil"
+OPCAO_TODAS_CLASSES = "Todos os perfis"
+SEM_RESULTADO_NO_FILTRO = "Nenhuma candidata desta busca pertence ao perfil selecionado."
 
 # ----------------------------------------------------------------------
 # Desfechos

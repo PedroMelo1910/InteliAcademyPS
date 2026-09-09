@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import inspect
 import sqlite3
+from dataclasses import replace
 from datetime import date
 
 import pytest
 from pydantic import ValidationError
 
-from radar.aplicacao import ErroAplicacao, construir_ranking
+from radar.aplicacao import ErroAplicacao, construir_ranking, personalizar_ranking
 from radar.base_startups import BaseStartups, conectar, preparar_cache_analises
 from radar.contratos import (
     AnalisePersistida,
@@ -416,6 +417,74 @@ def test_ranking_usa_bm25_nome_e_id_como_desempates():
     sem_documentos = resultado.model_copy(update={"documentos": []})
     ranking_nome = construir_ranking(sem_documentos, mesma_analise)
     assert [item.empresa.nome for item in ranking_nome] == ["Alfa", "Beta", "Gama", "Zulu"]
+
+
+def test_usuario_pode_priorizar_relevancia_sem_alterar_os_scores():
+    ranking = construir_ranking(
+        _resultado_ranking(), {item: _analise(item) for item in (1, 2, 3, 4)}
+    )
+
+    personalizado = personalizar_ranking(ranking, criterio="relevancia")
+
+    assert [item.empresa.id_startup for item in personalizado] == [4, 3, 1, 2]
+    assert [item.posicao for item in personalizado] == [1, 2, 3, 4]
+    assert {item.empresa.id_startup: item.fit_score_total for item in personalizado} == {
+        item.empresa.id_startup: item.fit_score_total for item in ranking
+    }
+
+
+def test_relevancia_preserva_setor_pedido_antes_do_melhor_termo_isolado():
+    """Evita que visão computacional no varejo supere saúde numa busca médica."""
+    ranking = construir_ranking(
+        _resultado_ranking(), {item: _analise(item) for item in (1, 2, 3, 4)}
+    )
+    por_id = {item.empresa.id_startup: item for item in ranking}
+    alice = replace(
+        por_id[1],
+        empresa=por_id[1].empresa.model_copy(
+            update={"nome": "Alice", "setor": "Saúde"}
+        ),
+        melhor_score_bm25=-4.5,
+    )
+    wine = replace(
+        por_id[2],
+        empresa=por_id[2].empresa.model_copy(
+            update={"nome": "Wine", "setor": "Varejo e e-commerce de bebidas"}
+        ),
+        melhor_score_bm25=-6.0,
+    )
+
+    personalizado = personalizar_ranking(
+        (wine, alice),
+        criterio="relevancia",
+        consulta="startups de saúde usando visão computacional em imagem médica",
+    )
+
+    assert [item.empresa.nome for item in personalizado] == ["Alice", "Wine"]
+
+
+def test_usuario_pode_filtrar_classe_e_as_posicoes_sao_renumeradas():
+    ranking = construir_ranking(
+        _resultado_ranking(), {item: _analise(item) for item in (1, 2, 3, 4)}
+    )
+    misto = tuple(
+        replace(
+            item,
+            classe=(
+                "AI-native"
+                if item.empresa.id_startup in (1, 3)
+                else "AI-enabled"
+            ),
+        )
+        for item in ranking
+    )
+
+    filtrado = personalizar_ranking(
+        misto, criterio="fit_score", classe="AI-native"
+    )
+
+    assert [item.empresa.id_startup for item in filtrado] == [3, 1]
+    assert [item.posicao for item in filtrado] == [1, 2]
 
 
 def test_persistencia_e_idempotente_e_isola_json_invalido(base, caplog):

@@ -25,7 +25,7 @@ O usuário descreve em linguagem natural o tipo de empresa que procura. O radar 
 ## O que o projeto entrega
 
 - Busca de startups por uma pergunta aberta, como “empresas brasileiras que usam visão computacional em saúde”.
-- Ranking de candidatas que usa a relação textual com a busca e mantém o fit-score NVIDIA como a única pontuação exibida.
+- Ranking de candidatas com controle para priorizar fit-score NVIDIA ou relação textual com a busca, além de filtro por classe.
 - Classificação fundamentada em `AI-native`, `AI-enabled` ou `non-AI`.
 - Validação determinística dos trechos públicos usados como evidência.
 - RAG híbrido sobre uma base local de conhecimento NVIDIA, com reranking e citações.
@@ -36,7 +36,7 @@ O usuário descreve em linguagem natural o tipo de empresa que procura. O radar 
 ## Como usar
 
 1. Abra a interface e descreva a empresa que deseja encontrar.
-2. Examine as candidatas priorizadas. O fit-score exibido mostra aderência comprovada à stack NVIDIA; a relação textual com a pergunta participa da busca e dos desempates, sem ser apresentada como uma segunda nota.
+2. Examine as candidatas e escolha a ordenação: maior fit-score NVIDIA ou maior relação com a busca. Também é possível filtrar por `AI-native`, `AI-enabled` ou `non-AI`. O índice textual participa da ordenação, mas não é exibido como uma segunda nota.
 3. Selecione uma startup e peça a análise aprofundada.
 4. Consulte a síntese, as evidências confirmadas, as necessidades ou oportunidades e as recomendações NVIDIA.
 5. Baixe o briefing em Markdown quando quiser registrar ou compartilhar o resultado.
@@ -110,7 +110,7 @@ flowchart LR
     SEM --> CACHE
 ```
 
-O lote não chama Query Planner, NVIDIA RAG, Recommendation ou Briefing. Sua função é manter um cache regenerável para que o ranking apareça rapidamente. A busca ainda calcula a relevância lexical da consulta atual, enquanto o fit-score vem da análise persistida. Resultados concluídos aparecem antes dos insuficientes ou ausentes; depois são ordenados por fit-score, BM25, nome e identificador.
+O lote não chama Query Planner, NVIDIA RAG, Recommendation ou Briefing. Sua função é manter um cache regenerável para que o ranking apareça rapidamente. A busca calcula a relação com a consulta atual, enquanto o fit-score vem da análise persistida. Por padrão, resultados concluídos aparecem antes dos insuficientes ou ausentes e seguem por fit-score, BM25, nome e identificador. Na interface, o usuário pode priorizar a relação com a busca: atributos escritos explicitamente, como setor, estágio ou localização, vêm antes da proximidade lexical BM25. Isso preserva a intenção original mesmo quando a recuperação precisa ampliar um filtro para produzir alternativas. Também é possível limitar a lista a uma classe; nenhuma dessas escolhas recalcula o fit-score, cria uma nota combinada ou chama um modelo.
 
 ### Fronteiras principais
 
@@ -351,7 +351,7 @@ PYTEST_TMP="$(mktemp -d)"
 python -m pytest -q -p no:cacheprovider --basetemp="$PYTEST_TMP/basetemp"
 ```
 
-Resultado verificado: **1.467 testes aprovados e um aviso de depreciação em biblioteca externa**.
+Resultado verificado: **1.472 testes aprovados e um aviso de depreciação em biblioteca externa**.
 
 A suíte bloqueia chamadas de rede acidentais e injeta provedores controlados. Ela cobre contratos, agentes, rotas do grafo, SQL parametrizado, RAG, fit-score, cache, ranking, segurança do Markdown, exportação e jornada da interface.
 
@@ -375,7 +375,7 @@ python -m scripts.avaliar_recuperacao
 - **Abstenção honesta:** falha de provedor, evidência insuficiente e empresa `non-AI` têm desfechos distintos; nenhum deles recebe conteúdo fabricado.
 - **Determinismo onde importa:** validação de proveniência, roteamento, fit-score, prioridade e complexidade não são delegados ao LLM.
 - **RAG híbrido local:** FTS5, sqlite-vec, RRF e reranking coexistem no mesmo banco sem depender de infraestrutura externa adicional.
-- **Separação de medidas:** relevância lexical responde à pergunta do usuário; fit-score responde à aderência NVIDIA.
+- **Separação de medidas:** a relação com a busca preserva atributos explícitos da pergunta e usa o BM25 como desempate lexical; o fit-score responde à aderência NVIDIA. A interface permite escolher qual perspectiva ordena a lista sem transformá-las em uma nota combinada.
 - **Rastreabilidade bilateral:** recomendações ligam fonte pública da startup a fonte técnica NVIDIA.
 - **Cache regenerável:** o ranking completo fica rápido sem gerar antecipadamente RAG, recomendações e briefings para todas as empresas.
 - **Resiliência controlada:** Groq pode substituir Gemini em falhas operacionais elegíveis; clientes NVIDIA são iniciados somente quando o RAG é usado, sem bloquear a descoberta textual.
