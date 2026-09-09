@@ -8,7 +8,8 @@ fronteira com a descoberta corrente e briefing que nunca é fabricado.
 A segunda parte cobre a memória entre telas quando há várias candidatas e
 várias buscas: cada candidata guarda o próprio resultado, a falha de uma não
 contamina o briefing de outra, uma busca nova não deixa nada da anterior vazar
-e nenhum rerun repete trabalho já feito.
+e nenhum rerun repete trabalho já feito. A ordenação visível pode mudar por
+escolha do usuário, mas não recalcula nenhuma medida.
 
 A terceira parte cobre o cartão do ranking depois da análise. A descoberta é
 uma fotografia do cache no instante da busca; se o usuário aprofunda uma
@@ -115,7 +116,7 @@ def test_a_descoberta_sobrevive_a_reruns_sem_reexecutar():
     assert "Maritaca AI" in textos(teste)
 
 
-def test_o_ranking_sai_na_ordem_devolvida_pela_aplicacao():
+def test_o_ranking_padrao_prioriza_analise_concluida():
     itens = (
         item_ausente(posicao=1, id_startup=4, nome="Zeta"),
         item_concluido_ia(posicao=2, id_startup=1, nome="Alfa"),
@@ -125,7 +126,7 @@ def test_o_ranking_sai_na_ordem_devolvida_pela_aplicacao():
     submeter(teste, CONSULTA_PADRAO)
     tela = textos(teste)
 
-    assert tela.index("Zeta") < tela.index("Alfa")
+    assert tela.index("Alfa") < tela.index("Zeta")
 
 
 def test_os_quatro_estados_de_analise_aparecem_com_leituras_distintas():

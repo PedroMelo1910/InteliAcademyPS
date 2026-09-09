@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
+import unicodedata
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
+from typing import Literal
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -83,6 +86,134 @@ class SaidaDescoberta:
     tentativas_relaxamento: int
     criterios_relaxados: tuple[str, ...]
     trajeto: tuple[str, ...]
+
+
+CriterioOrdenacaoRanking = Literal["fit_score", "relevancia"]
+
+
+_PALAVRAS_ESTRUTURAIS_IGNORADAS = frozenset(
+    {
+        "a",
+        "as",
+        "com",
+        "da",
+        "das",
+        "de",
+        "do",
+        "dos",
+        "e",
+        "em",
+        "na",
+        "nas",
+        "no",
+        "nos",
+        "o",
+        "os",
+        "para",
+        "por",
+    }
+)
+
+
+def _tokens_comparaveis(texto: str | None) -> frozenset[str]:
+    """Normaliza texto para comparar atributos sem depender de acento ou caixa."""
+    if not texto:
+        return frozenset()
+    sem_acentos = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFKD", texto.casefold())
+        if not unicodedata.combining(caractere)
+    )
+    return frozenset(
+        token
+        for token in re.findall(r"[a-z0-9]+", sem_acentos)
+        if token not in _PALAVRAS_ESTRUTURAIS_IGNORADAS
+    )
+
+
+def _aderencia_estruturada(item: ItemRanking, consulta: str) -> float:
+    """Mede quanto dos atributos da empresa foi pedido literalmente na consulta.
+
+    A recuperação pode relaxar setor, estágio ou localização para não devolver
+    uma lista curta demais. Na visualização por relação, esses atributos ainda
+    devem funcionar como preferência: uma empresa de Saúde deve preceder uma
+    varejista quando a pessoa escreveu ``saúde``, mesmo que a varejista tenha
+    um documento com uma expressão técnica rara da mesma pergunta.
+    """
+    tokens_consulta = _tokens_comparaveis(consulta)
+    if not tokens_consulta:
+        return 0.0
+
+    afinidades: list[float] = []
+    for valor in (
+        item.empresa.nome,
+        item.empresa.setor,
+        item.empresa.estagio,
+        item.empresa.localizacao,
+    ):
+        tokens_valor = _tokens_comparaveis(valor)
+        if tokens_valor:
+            afinidades.append(len(tokens_valor & tokens_consulta) / len(tokens_valor))
+    # A soma recompensa quem preserva mais de uma restrição da pergunta
+    # (por exemplo, setor e localização), em vez de tratar um único acerto
+    # isolado como equivalente ao conjunto completo da intenção.
+    return sum(afinidades)
+
+
+def personalizar_ranking(
+    ranking: tuple[ItemRanking, ...],
+    *,
+    criterio: CriterioOrdenacaoRanking,
+    classe: ClasseStartup | None = None,
+    consulta: str = "",
+) -> tuple[ItemRanking, ...]:
+    """Filtra e reordena candidatas sem recalcular nenhuma das duas medidas.
+
+    O fit-score e o BM25 já chegam prontos da aplicação. Esta função apenas
+    escolhe qual deles governa a ordem visível e renumera o recorte escolhido
+    pelo usuário. Assim, a interface não precisa conhecer regras de domínio.
+    """
+    filtrados = tuple(
+        item for item in ranking if classe is None or item.classe == classe
+    )
+
+    if criterio == "fit_score":
+        for item in filtrados:
+            if item.status_analise == "concluida" and item.fit_score_total is None:
+                raise ErroAplicacao(
+                    "análise concluída sem FitScore para a startup "
+                    f"{item.empresa.id_startup}: a ordenação não inventa pontuação"
+                )
+        ordenados = sorted(
+            filtrados,
+            key=lambda item: (
+                0 if item.status_analise == "concluida" else 1,
+                -(item.fit_score_total or 0),
+                item.melhor_score_bm25,
+                item.empresa.nome.casefold(),
+                item.empresa.id_startup,
+            ),
+        )
+    elif criterio == "relevancia":
+        # Primeiro preserva atributos explicitamente pedidos que podem ter sido
+        # relaxados na recuperação. Depois usa o BM25 do SQLite, no qual valores
+        # menores representam maior proximidade lexical.
+        ordenados = sorted(
+            filtrados,
+            key=lambda item: (
+                -_aderencia_estruturada(item, consulta),
+                item.melhor_score_bm25,
+                item.empresa.nome.casefold(),
+                item.empresa.id_startup,
+            ),
+        )
+    else:
+        raise ValueError(f"critério de ordenação desconhecido: {criterio}")
+
+    return tuple(
+        replace(item, posicao=posicao)
+        for posicao, item in enumerate(ordenados, start=1)
+    )
 
 
 def construir_ranking(
