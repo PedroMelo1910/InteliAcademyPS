@@ -1,3 +1,5 @@
+"""Monta o fluxo LangGraph principal e o fluxo reduzido de análise em lote."""
+
 from __future__ import annotations
 
 import sqlite3

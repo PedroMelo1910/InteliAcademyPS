@@ -1,3 +1,5 @@
+"""Testa a validação determinística e o isolamento das evidências."""
+
 import json
 import sqlite3
 from dataclasses import dataclass

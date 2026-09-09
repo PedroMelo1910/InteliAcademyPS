@@ -1,3 +1,5 @@
+"""Testa a classificação estruturada e suas falhas seguras."""
+
 import pytest
 from pydantic import ValidationError
 

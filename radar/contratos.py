@@ -1,3 +1,5 @@
+"""Define os contratos Pydantic e o estado tipado compartilhado pelo grafo."""
+
 from __future__ import annotations
 
 import math

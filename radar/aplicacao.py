@@ -1,3 +1,5 @@
+"""Orquestra a descoberta, o ranking e o aprofundamento usados pela interface."""
+
 from __future__ import annotations
 
 import os

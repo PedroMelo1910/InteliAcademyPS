@@ -1,3 +1,5 @@
+"""Centraliza a persistência SQLite e as consultas sobre startups e análises."""
+
 from __future__ import annotations
 
 import json

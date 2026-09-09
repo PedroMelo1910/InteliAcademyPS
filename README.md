@@ -351,7 +351,7 @@ PYTEST_TMP="$(mktemp -d)"
 python -m pytest -q -p no:cacheprovider --basetemp="$PYTEST_TMP/basetemp"
 ```
 
-Resultado verificado: **1.465 testes aprovados e um aviso de depreciação em biblioteca externa**.
+Resultado verificado: **1.467 testes aprovados e um aviso de depreciação em biblioteca externa**.
 
 A suíte bloqueia chamadas de rede acidentais e injeta provedores controlados. Ela cobre contratos, agentes, rotas do grafo, SQL parametrizado, RAG, fit-score, cache, ranking, segurança do Markdown, exportação e jornada da interface.
 

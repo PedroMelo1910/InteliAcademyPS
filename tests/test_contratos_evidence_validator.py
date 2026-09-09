@@ -1,3 +1,5 @@
+"""Testa os contratos de evidência validada e dos estados de gap."""
+
 import pytest
 from pydantic import ValidationError
 

@@ -1,3 +1,5 @@
+"""Resolve recomendações rastreáveis a partir de evidências dos dois corpora."""
+
 from __future__ import annotations
 
 from datetime import date

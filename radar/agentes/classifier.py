@@ -1,3 +1,5 @@
+"""Classifica o perfil extraído sem acessar o rótulo de avaliação da curadoria."""
+
 from __future__ import annotations
 
 import re

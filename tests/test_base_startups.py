@@ -1,3 +1,5 @@
+"""Testa a carga, a consulta e o isolamento da fronteira SQLite."""
+
 import sqlite3
 
 import pytest

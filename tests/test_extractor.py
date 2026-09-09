@@ -1,3 +1,5 @@
+"""Testa a extração, a normalização e a repetição controlada de saída."""
+
 import json
 import sqlite3
 from dataclasses import dataclass

@@ -1,3 +1,5 @@
+"""Implementa as decisões determinísticas R1, R2 e R3 do fluxo principal."""
+
 from radar.configuracao import (
     LIMIAR_DERRUBADA,
     MAX_EXTRACOES,

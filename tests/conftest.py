@@ -1,3 +1,5 @@
+"""Fornece fixtures globais e impede chamadas de rede na suíte offline."""
+
 import hashlib
 import asyncio
 import os

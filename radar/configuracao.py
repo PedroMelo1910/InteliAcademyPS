@@ -1,3 +1,5 @@
+"""Reúne caminhos, modelos e limites operacionais explícitos do projeto."""
+
 from pathlib import Path
 
 

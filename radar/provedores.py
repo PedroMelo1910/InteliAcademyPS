@@ -1,3 +1,5 @@
+"""Adapta Gemini, Groq e serviços NVIDIA às fronteiras internas do radar."""
+
 from __future__ import annotations
 
 import logging

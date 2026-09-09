@@ -1,3 +1,5 @@
+"""Extrai afirmações estruturadas apenas dos documentos permitidos da startup."""
+
 from __future__ import annotations
 
 import logging

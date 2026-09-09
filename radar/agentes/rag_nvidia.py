@@ -1,3 +1,5 @@
+"""Recupera o contexto técnico NVIDIA necessário para gerar recomendações."""
+
 from __future__ import annotations
 
 from typing import Any

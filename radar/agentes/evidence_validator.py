@@ -1,3 +1,5 @@
+"""Confere deterministicamente a proveniência das afirmações extraídas."""
+
 from __future__ import annotations
 
 from typing import Any

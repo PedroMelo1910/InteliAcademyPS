@@ -1,3 +1,5 @@
+"""Transforma a pergunta livre do usuário em um plano de consulta validado."""
+
 from __future__ import annotations
 
 import json

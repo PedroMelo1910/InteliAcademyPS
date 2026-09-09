@@ -1,3 +1,5 @@
+"""Testa a pré-análise, o cache e a ordenação do ranking persistido."""
+
 from __future__ import annotations
 
 import inspect

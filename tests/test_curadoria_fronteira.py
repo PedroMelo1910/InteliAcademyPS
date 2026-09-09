@@ -46,6 +46,21 @@ def test_a_curadoria_carrega_exatamente_trinta_startups(curadoria):
     assert len(ids) == TOTAL_STARTUPS
 
 
+def test_botcity_ocupa_a_quarta_posicao_da_curadoria(curadoria):
+    """Protege a identidade e a posição estável da nova empresa curada."""
+    base, _ = curadoria
+
+    with sqlite3.connect(base.caminho_banco) as conexao:
+        nomes = [
+            linha[0]
+            for linha in conexao.execute(
+                "SELECT nome FROM startups ORDER BY id"
+            ).fetchall()
+        ]
+
+    assert nomes[3] == "BotCity"
+
+
 def test_cada_startup_tem_pelo_menos_tres_documentos(curadoria):
     base, ids = curadoria
 
