@@ -299,7 +299,7 @@ erDiagram
         text data_acesso
     }
     ANALISES {
-        integer startup_id PK_FK
+        integer startup_id PK, FK
         text status
         text classe
         integer fit_score_total
